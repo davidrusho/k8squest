@@ -15,17 +15,28 @@ LEVEL_NUM=$2
 LEVEL_NAME=$3
 DESCRIPTION=$4
 
-# Determine world directory name
-case $WORLD_NUM in
-    1) WORLD_DIR="world-1-basics" ;;
-    2) WORLD_DIR="world-2-deployments" ;;
-    3) WORLD_DIR="world-3-networking" ;;
-    4) WORLD_DIR="world-4-storage" ;;
-    5) WORLD_DIR="world-5-security" ;;
-    *) echo "Invalid world number. Use 1-5."; exit 1 ;;
-esac
+# Determine world directory name from worlds/*/world.yaml (`order: N`)
+WORLD_DIR=""
+for world_yaml in worlds/*/world.yaml; do
+    if grep -qx "order: $WORLD_NUM" "$world_yaml"; then
+        WORLD_DIR=$(basename "$(dirname "$world_yaml")")
+        break
+    fi
+done
+
+if [ -z "$WORLD_DIR" ]; then
+    echo "No world with 'order: $WORLD_NUM' found. Known worlds:"
+    grep -H "^order:" worlds/*/world.yaml
+    exit 1
+fi
 
 LEVEL_DIR="worlds/$WORLD_DIR/level-$LEVEL_NUM-$LEVEL_NAME"
+
+# Level directory names must be unique across all worlds
+if ls -d worlds/*/"level-$LEVEL_NUM-$LEVEL_NAME" >/dev/null 2>&1; then
+    echo "Level already exists: level-$LEVEL_NUM-$LEVEL_NAME"
+    exit 1
+fi
 
 # Create directory
 mkdir -p "$LEVEL_DIR"
@@ -47,6 +58,20 @@ EOF
 # Create broken.yaml
 cat > "$LEVEL_DIR/broken.yaml" <<EOF
 # TODO: Add intentionally broken Kubernetes resources
+apiVersion: v1
+kind: Pod
+metadata:
+  name: example-pod
+  namespace: k8squest
+spec:
+  containers:
+  - name: app
+    image: nginx:latest
+EOF
+
+# Create solution.yaml
+cat > "$LEVEL_DIR/solution.yaml" <<EOF
+# TODO: Add the fixed Kubernetes resources
 apiVersion: v1
 kind: Pod
 metadata:
@@ -138,9 +163,9 @@ echo ""
 echo "Next steps:"
 echo "1. Edit $LEVEL_DIR/mission.yaml - Add mission details"
 echo "2. Edit $LEVEL_DIR/broken.yaml - Add broken K8s resources"
-echo "3. Edit $LEVEL_DIR/validate.sh - Add validation logic"
-echo "4. Edit $LEVEL_DIR/hint-*.txt - Add progressive hints"
-echo "5. Edit $LEVEL_DIR/debrief.md - Add learning content"
-echo "6. (Optional) Create $LEVEL_DIR/solution.yaml - Add solution"
+echo "3. Edit $LEVEL_DIR/solution.yaml - Add the fixed resources"
+echo "4. Edit $LEVEL_DIR/validate.sh - Add validation logic"
+echo "5. Edit $LEVEL_DIR/hint-*.txt - Add progressive hints"
+echo "6. Edit $LEVEL_DIR/debrief.md - Add learning content"
 echo ""
 echo "Test with: ./play.sh"

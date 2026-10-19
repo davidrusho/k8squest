@@ -6,6 +6,8 @@ This document provides the complete reference for all 50 K8sQuest challenges acr
 **Total Levels**: 50 
 **Total XP**: 10,200  
 
+> This blueprint is historical: it records the original plan, and the XP figures below are the planned values. The game computes level and XP totals from the `mission.yaml` files on disk, and currently sums to 11,600 XP.
+
 
 ## ✅ WORLD 1: CORE KUBERNETES BASICS (Levels 1-10) 
 

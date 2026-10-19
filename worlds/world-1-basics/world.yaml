@@ -1,0 +1,5 @@
+order: 1
+title: "Core Kubernetes Basics"
+description: "Pods, labels, ports, logs, init containers and namespaces: the fundamentals of debugging a broken workload."
+cluster: kind
+requires: []

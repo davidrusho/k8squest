@@ -486,6 +486,6 @@ When stuck on a level, try these in order:
 
 ---
 
-💡 **Pro Tip:** Practice rolling updates on a test deployment before production. Use `--record` flag to track changes in rollout history!
+💡 **Pro Tip:** Practice rolling updates on a test deployment before production. To track changes in rollout history, annotate the Deployment after each change: `kubectl annotate deployment/<name> kubernetes.io/change-cause="<what changed>" -n k8squest`, then check `kubectl rollout history deployment/<name> -n k8squest`. The old `--record` flag is deprecated and will be removed in a future release.
 
 🎮 **Ready for advanced patterns?** Run `./play.sh` and master deployments!

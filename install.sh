@@ -21,6 +21,17 @@ PYTHON_VERSION=$(python3 -c "import sys; v=sys.version_info; print(f'{v.major}.{
 }
 echo "✅ Python $PYTHON_VERSION detected"
 
+# kind v0.33.0 defaults to Kubernetes v1.37.0, the image kind/cluster.yaml pins.
+# Warn on anything older rather than fail: the pinned image may still work there.
+KIND_VERSION=$(kind version 2>/dev/null | sed -n 's/^kind v\([0-9][0-9.]*\).*/\1/p')
+if [ -z "$KIND_VERSION" ]; then
+  echo "⚠️  Could not determine kind version; K8sQuest expects kind >= v0.33.0"
+elif [ "$(printf '%s\n' "0.33.0" "$KIND_VERSION" | sort -V | head -n 1)" != "0.33.0" ]; then
+  echo "⚠️  kind v$KIND_VERSION detected; K8sQuest expects kind >= v0.33.0 (upgrade: brew upgrade kind)"
+else
+  echo "✅ kind v$KIND_VERSION detected"
+fi
+
 echo "✅ Prerequisites OK"
 echo ""
 
@@ -53,7 +64,7 @@ echo ""
 # Create Kubernetes cluster
 if ! kind get clusters | grep k8squest >/dev/null 2>&1; then
   echo "🔧 Creating Kubernetes cluster..."
-  kind create cluster --name k8squest
+  kind create cluster --name k8squest --config kind/cluster.yaml
 else
   echo "✅ Cluster already exists"
 fi

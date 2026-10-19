@@ -212,15 +212,15 @@ Layer 3: Namespace Isolation (Kubernetes)
 ┌────────────────────────────────────────────────────────────────┐
 │  📊 K8sQuest Statistics                                        │
 ├────────────────────────────────────────────────────────────────┤
-│  Total Levels:              50 (10 complete, 40 blueprinted)  │
-│  Total XP Available:        11,500                            │
+│  Total Levels:              50 (5 worlds of 10)               │
+│  Total XP Available:        11,600                            │
 │  Worlds:                    5                                 │
 │  Lines of Code (Engine):    ~1,500                            │
 │  Lines of Documentation:    ~3,000+                           │
 │  Safety Test Coverage:      20 tests, 100% passing            │
 │  Setup Time:                ~5 minutes                        │
 │  Avg Level Duration:        10-15 minutes                     │
-│  Learning Outcomes:         CKA exam preparation level        │
+│  Learning Outcomes:         Practice for parts of the CKA     │
 └────────────────────────────────────────────────────────────────┘
 
 Created with ❤️ for Kubernetes learners worldwide

@@ -1,9 +1,17 @@
 #!/bin/bash
 set -e
 
-WORLD_DIR="worlds/world-1-basics"
+# First world = the world.yaml with the lowest `order`
+WORLD_YAML=$(for y in worlds/*/world.yaml; do
+  printf '%s %s\n' "$(sed -n 's/^order: *\([0-9]*\).*/\1/p' "$y")" "$y"
+done | sort -n | head -n 1 | awk '{print $2}')
+WORLD_DIR=$(dirname "$WORLD_YAML")
 
-for LEVEL in "$WORLD_DIR"/*; do
+LEVELS=$(for d in "$WORLD_DIR"/level-*; do
+  printf '%s %s\n' "$(basename "$d" | cut -d- -f2)" "$d"
+done | sort -n | awk '{print $2}')
+
+for LEVEL in $LEVELS; do
   echo "=================================="
   echo "▶ Starting $(basename $LEVEL)"
   echo "=================================="
@@ -21,4 +29,4 @@ for LEVEL in "$WORLD_DIR"/*; do
 
 done
 
-echo "🎉 World 1 completed!"
+echo "🎉 $(basename "$WORLD_DIR") completed!"

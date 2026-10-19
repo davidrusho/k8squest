@@ -6,8 +6,11 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends bash ca-certificates curl \
-    && curl -fsSL -o /usr/local/bin/kubectl \
-    "https://dl.k8s.io/release/v1.31.4/bin/linux/${TARGETARCH:-amd64}/kubectl" \
+    && KUBECTL_URL="https://dl.k8s.io/release/v1.37.1/bin/linux/${TARGETARCH:-amd64}/kubectl" \
+    && curl -fsSL -o /usr/local/bin/kubectl "${KUBECTL_URL}" \
+    && curl -fsSL -o /tmp/kubectl.sha256 "${KUBECTL_URL}.sha256" \
+    && echo "$(cat /tmp/kubectl.sha256)  /usr/local/bin/kubectl" | sha256sum --check \
+    && rm /tmp/kubectl.sha256 \
     && chmod +x /usr/local/bin/kubectl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -16,7 +19,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY engine ./engine
 COPY worlds ./worlds
-COPY progress.json ./progress.json
 
 ENV K8SQUEST_WEB=true
 

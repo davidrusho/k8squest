@@ -101,7 +101,6 @@ K8sQuest Learning Path
 ├─ WORLD 3: Networking & Services ⭐⭐
 │  │  Difficulty: Intermediate | Time: 4-6 hours | XP: ~2,000
 │  │  Prerequisites: Complete World 2 (Levels 1-20)
-│  │  Coming Soon!
 │  │  
 │  └─ Planned Topics:
 │     • Service types (ClusterIP, NodePort, LoadBalancer)
@@ -113,7 +112,6 @@ K8sQuest Learning Path
 ├─ WORLD 4: Storage & StatefulSets ⭐⭐⭐
 │  │  Difficulty: Advanced | Time: 5-7 hours | XP: ~2,500
 │  │  Prerequisites: Complete World 3
-│  │  Coming Soon!
 │  │  
 │  └─ Planned Topics:
 │     • PersistentVolumes and claims
@@ -125,7 +123,6 @@ K8sQuest Learning Path
 └─ WORLD 5: Security & RBAC ⭐⭐⭐
    │  Difficulty: Advanced | Time: 5-7 hours | XP: ~2,500
    │  Prerequisites: Complete World 4
-   │  Coming Soon!
    │  
    └─ Planned Topics:
       • RBAC troubleshooting
@@ -172,12 +169,12 @@ Week 2: World 2 (full)
   • Deployment patterns will be new territory
   • Take time with HPA and PDB levels
   
-Result: In 2 weeks, you'll be production-ready
+Result: In 2 weeks, you'll have worked through Worlds 1-2 (basics, deployments and scaling)
 ```
 
-### Path C: Experienced Engineer (Study for CKA/CKAD)
+### Path C: Experienced Engineer (Preparing for a Certification)
 ```
-Week 1: All levels, exam mode
+Week 1: Worlds 1-5, exam mode
   • No hints, no guides
   • Time yourself
   • Focus on speed and accuracy
@@ -186,7 +183,9 @@ Week 2: Review missed concepts
   • Read debriefs for weak areas
   • Practice real-world scenarios
   
-Result: Exam-ready in 2 weeks
+Result: Worlds 1-5 cover parts of the CKA and CKAD curricula (see
+        Certification Alignment below). They are practice, not full
+        exam preparation. Worlds 6-8 are being added to close the gaps.
 ```
 
 ---
@@ -255,21 +254,21 @@ Level 1 (CrashLoopBackOff)
 - SRE Engineer
 - Kubernetes Administrator
 
-### After World 3: Networking (Coming)
+### After World 3: Networking
 **You will be able to:**
 - Debug service discovery issues
 - Configure ingress controllers
 - Implement network policies
 - Troubleshoot DNS problems
 
-### After World 4: Storage (Coming)
+### After World 4: Storage
 **You will be able to:**
 - Manage stateful applications
 - Configure persistent storage
 - Handle data migrations
 - Debug volume mount issues
 
-### After World 5: Security (Coming)
+### After World 5: Security
 **You will be able to:**
 - Implement RBAC policies
 - Secure cluster access
@@ -294,25 +293,44 @@ Level 1 (CrashLoopBackOff)
 
 ## 🎯 Certification Alignment
 
-### CKAD (Certified Kubernetes Application Developer)
-**K8sQuest Coverage:**
-- ✅ Core Concepts (World 1)
-- ✅ Multi-Container Pods (Level 7-9)
-- ✅ Pod Design (World 2)
-- ⏳ Services & Networking (World 3)
-- ⏳ State Persistence (World 4)
-
-**Recommendation:** Complete Worlds 1-4 for full CKAD readiness
+K8sQuest is a break-and-fix game. It trains the troubleshooting habits the
+exams reward, but it does not replace the official curriculum or timed
+practice on the exam environment. The CKA currently runs on Kubernetes v1.37.
 
 ### CKA (Certified Kubernetes Administrator)
-**K8sQuest Coverage:**
-- ✅ Workloads & Scheduling (Worlds 1-2)
-- ⏳ Services & Networking (World 3)
-- ⏳ Storage (World 4)
-- ⏳ Security (World 5)
-- ⏳ Cluster Maintenance (World 6 planned)
 
-**Recommendation:** Complete all worlds + official CKA labs
+The five official CKA domains, with their exam weights, and what K8sQuest
+covers today:
+
+| Domain | Weight | Covered today | Status |
+|--------|--------|---------------|--------|
+| Storage | 10% | Storage classes and dynamic provisioning (levels 31, 35); volume types, access modes and reclaim policies (33, 39, 40); PersistentVolumes and PersistentVolumeClaims (World 4) | Covered |
+| Workloads & Scheduling | 15% | Deployments, rollouts and rollbacks, probes, HPA, ConfigMaps and Secrets (Worlds 1, 2, 4); affinity, taints and tolerations, quotas, PriorityClass, PodDisruptionBudgets (World 5) | Mostly covered; VPA not covered yet |
+| Services & Networking | 20% | Services, endpoints, DNS, Ingress, NetworkPolicy (World 3) | Partly covered; Gateway API is not covered yet |
+| Cluster Architecture, Installation & Configuration | 25% | RBAC (World 5) only | Mostly not covered yet |
+| Troubleshooting | 30% | Pod, Deployment, Service and storage faults on a single-node kind cluster (Worlds 1-5, the Level 50 finale) | Partly covered; node, control-plane and multi-node faults are not covered yet |
+
+The two heaviest domains (Troubleshooting 30% and Cluster Architecture 25%)
+are the ones K8sQuest covers least today. Three worlds are being added for them:
+
+- **World 6: Cluster Architecture** (in progress) - Helm, Kustomize, CRDs and
+  operators, Gateway API, VPA, and the cluster extension interfaces
+- **World 7: Troubleshooting** (in progress) - faults on a multi-node kind cluster
+- **World 8: kubeadm on Lima VMs** (in progress) - building and repairing a
+  cluster with kubeadm on virtual machines
+
+Until those worlds ship, plan on the official curriculum and a timed
+practice environment for those two domains.
+
+### CKAD (Certified Kubernetes Application Developer)
+
+Worlds 1-5 overlap with the application-developer topics: multi-container
+pods and init containers (World 1), deployment strategies, probes and
+autoscaling (World 2), Services, Ingress and NetworkPolicy (World 3),
+persistent storage, ConfigMaps and Secrets (World 4), and SecurityContext
+and ResourceQuota (World 5). The exam is also a timed, hands-on test of
+writing manifests from scratch, which K8sQuest does not practice. Check the
+current CKAD curriculum for the domain list and weights.
 
 ---
 

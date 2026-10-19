@@ -4,7 +4,7 @@
 
 Welcome, contributor! This guide will help you create new K8sQuest challenges that are maintainable, consistent, and provide actual learning value.
 
-**K8sQuest is now COMPLETE with all 50 levels across 5 worlds!** However, we welcome:
+**K8sQuest has 50 levels across 5 worlds today, with Worlds 6-8 in progress.** We welcome:
 - Bug fixes and improvements to existing levels
 - New bonus levels or alternative challenges
 - Translations and localization
@@ -322,15 +322,43 @@ Apply these in both pod-level and container-level securityContext!
 - Hint 2: "What to focus on"
 - Hint 3: "How to fix it"
 
+## 🌍 Defining a World (`world.yaml`)
+
+Every world is a directory under `worlds/` containing a `world.yaml` and its `level-*` subdirectories. The engine finds worlds by globbing `worlds/*/world.yaml`, sorts them by `order`, and computes the level count and XP total from the `mission.yaml` files on disk. Nothing else lists worlds, so adding a world means adding a directory.
+
+```yaml
+order: 6                       # integer; play order; must be unique across worlds
+title: "Cluster Architecture"  # shown as "World 6: Cluster Architecture"
+description: "One sentence on what the world teaches."
+cluster: kind                  # kind | kind-multinode | lima
+requires: []                   # host tools levels may use, e.g. [helm, kustomize]
+```
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `order` | integer | Position in the game. Worlds are played in ascending order. |
+| `title` | string | Short world name. |
+| `description` | string | One-sentence summary. |
+| `cluster` | `kind`, `kind-multinode` or `lima` | The kind of cluster the world's levels run on. |
+| `requires` | list of strings | Host tools the world's levels may use (see below). Empty for kubectl-only worlds. |
+
+Rules:
+- Level directory names (`level-N-name`) must be unique across **all** worlds; discovery refuses to start otherwise. Level numbering continues across worlds (World 6 starts after the last level of World 5).
+- `mission.yaml` `xp` values are summed for the total XP; don't hard-code totals anywhere.
+- `utils/test-all-levels.sh` and `tests/test_discovery.py` check `world.yaml` and the 8 mandatory files for every level.
+- `tools/create_level.sh <world-order> ...` looks up the world by its `order`.
+
 ## 🚫 What NOT to Do
 
 ❌ **Don't create multi-issue challenges** (except for special finale levels)
 - Each level should teach ONE concept clearly
 - Multiple issues confuse learners
 
-❌ **Don't require external tools** (helm, kustomize, operators, etc.)
-- Keep it kubectl-only for consistency
-- External tools add complexity
+❌ **Don't use a tool its world doesn't declare**
+- A level may only use host tools listed in its world's `world.yaml` `requires`
+- `kubectl` is always available and never needs listing; Worlds 1-5 declare `requires: []`, so their levels are kubectl-only
+- If a level needs `helm`, `kustomize`, `limactl` or similar, add it to the world's `requires` first, so the tool list for each world is visible in one place
+- The engine does not yet check that declared tools are installed; `requires` is the contract contributors and reviewers hold levels to
 
 ❌ **Don't use real secrets/credentials**
 - Use obviously fake values: `password123`, `fake-token`
@@ -479,15 +507,14 @@ Choose XP based on difficulty and learning value:
 
 ## 🌍 World Structure
 
-Levels are organized into worlds by theme:
+Levels are organized into worlds by theme. The list of worlds is the set of `worlds/*/world.yaml` files, ordered by their `order` field (see "Defining a World" above); read the `title` and `description` there rather than a copy of the list in this document. To see the current worlds and their level counts:
 
-- **World 1 (1-10)**: Basics - Pods, Deployments, Labels, Namespaces
-- **World 2 (11-20)**: Deployments & Scaling - Updates, HPA, Probes
-- **World 3 (21-30)**: Networking - Services, Ingress, DNS, NetworkPolicy
-- **World 4 (31-40)**: Storage - PVs, PVCs, StatefulSets, ConfigMaps
-- **World 5 (41-50)**: Security & Production - RBAC, Security, Resources
+```bash
+grep -H "^\(order\|title\):" worlds/*/world.yaml
+python3 tools/progress_tracker.py
+```
 
-New levels should fit logically into existing worlds or propose a new themed world.
+New levels should fit logically into an existing world or propose a new themed world by adding a `world.yaml`.
 
 ## 🤝 Submission Process
 

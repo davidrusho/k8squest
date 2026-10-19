@@ -11,6 +11,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.align import Align
 from rich import box
+from world_discovery import WorldDiscoveryError, find_world
 
 console = Console()
 
@@ -159,21 +160,43 @@ def show_retro_welcome():
     console.print(Align.center("✨ PRESS START TO BEGIN ✨"), style="bold magenta blink")
     console.print()
 
+def get_world_banner(world_num):
+    """Banner for a world: the hand-drawn one if it exists, otherwise one built
+    from the title and description in worlds/<world>/world.yaml."""
+    world_key = f"world-{world_num}"
+    if world_key in WORLD_BANNERS:
+        return WORLD_BANNERS[world_key]
+    try:
+        world = find_world(world_num)
+    except WorldDiscoveryError:
+        return None
+    if world is None:
+        return None
+    heading = f"WORLD {world.order}: {world.title}".upper()
+    width = max(len(heading), 37) + 2
+    return (
+        "\n"
+        f"    ╔{'═' * width}╗\n"
+        f"    ║{heading.center(width)}║\n"
+        f"    ╚{'═' * width}╝\n"
+        f"    {world.description}\n"
+    )
+
 def show_world_entry(world_num):
     """Animated world entry screen"""
     console.clear()
     
-    world_key = f"world-{world_num}"
-    if world_key in WORLD_BANNERS:
-        console.print(WORLD_BANNERS[world_key], style="bold yellow")
+    banner = get_world_banner(world_num)
+    if banner:
+        console.print(banner, style="bold yellow", markup=False)
     
     # Countdown
     for i in range(3, 0, -1):
         console.print(Align.center(f"⏱️  {i}"), style="bold red")
         time.sleep(0.5)
         console.clear()
-        if world_key in WORLD_BANNERS:
-            console.print(WORLD_BANNERS[world_key], style="bold yellow")
+        if banner:
+            console.print(banner, style="bold yellow", markup=False)
     
     console.print(Align.center("🚀 GO! GO! GO!"), style="bold green")
     time.sleep(1)
@@ -225,7 +248,7 @@ def show_victory(xp_earned, total_xp):
     console.print(Align.center(f"💎 TOTAL XP: {total_xp} 💎"), style="bold cyan")
     console.print()
 
-def show_game_complete():
+def show_game_complete(total_levels):
     """Final game completion screen"""
     console.clear()
     
@@ -233,7 +256,7 @@ def show_game_complete():
     console.print()
     console.print(Align.center("🏆🏆🏆 KUBERNETES MASTER! 🏆🏆🏆"), style="bold yellow")
     console.print()
-    console.print(Align.center("YOU'VE CONQUERED ALL 50 LEVELS!"), style="bold green")
+    console.print(Align.center(f"YOU'VE CONQUERED ALL {total_levels} LEVELS!"), style="bold green")
     console.print(Align.center("⎈⎈⎈ PERFECT! ⎈⎈⎈"), style="bold cyan")
     console.print()
     
@@ -248,9 +271,9 @@ def show_hp_bar(current_hp, max_hp=3):
     hearts = "❤️" * current_hp + "🖤" * (max_hp - current_hp)
     return f"[bold red]LIVES: {hearts}[/bold red]"
 
-def show_xp_bar(current_xp, max_xp=10200):
-    """Show XP progress bar"""
-    percentage = (current_xp / max_xp) * 100
+def show_xp_bar(current_xp, max_xp):
+    """Show XP progress bar (max_xp is the sum of mission XP on disk)"""
+    percentage = (current_xp / max_xp) * 100 if max_xp else 0
     filled = int(percentage / 5)
     bar = "█" * filled + "░" * (20 - filled)
     return f"[bold yellow]XP: [{bar}] {current_xp}/{max_xp}[/bold yellow]"

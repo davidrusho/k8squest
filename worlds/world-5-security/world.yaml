@@ -1,0 +1,5 @@
+order: 5
+title: "Security & Production Ops"
+description: "RBAC, security contexts, quotas, scheduling constraints and a multi-failure finale."
+cluster: kind
+requires: []

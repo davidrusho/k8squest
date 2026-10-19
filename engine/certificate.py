@@ -8,6 +8,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from world_discovery import WorldDiscoveryError, discover_worlds
+
 def generate_certificate(world_num, player_name, total_xp):
     """Generate a completion certificate for a world"""
     
@@ -46,6 +48,22 @@ def generate_certificate(world_num, player_name, total_xp):
         }
     }
     
+    # Worlds without a hand-written entry above (Worlds 3+) come from world.yaml
+    try:
+        discovered = {w.order: w for w in discover_worlds()}
+    except WorldDiscoveryError:
+        discovered = {}
+
+    if world_num not in world_info and world_num in discovered:
+        found = discovered[world_num]
+        world_info[world_num] = {
+            "name": found.title,
+            "levels": len(found.levels),
+            "skills": [
+                level.mission.get("name", level.name) for level in found.levels
+            ],
+        }
+
     if world_num not in world_info:
         print(f"❌ World {world_num} not found")
         return
@@ -76,7 +94,10 @@ Date: {date}
     
     certificate += "\n"
     
-    if world_num == 1:
+    later = sorted(order for order in discovered if order > world_num)
+    if later:
+        certificate += f"Next: World {later[0]} - {discovered[later[0]].title}\n"
+    elif world_num == 1:
         certificate += "Next: World 2 - Deployments & Scaling\n"
     elif world_num == 2:
         certificate += "Next: World 3 - Networking & Services\n"

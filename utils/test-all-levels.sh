@@ -1,12 +1,16 @@
 #!/bin/bash
-# Test script for all K8sQuest levels (1-20)
-# Validates that all required files exist and are properly configured
+# Test script for all K8sQuest levels
+# Walks every world under worlds/ and validates world.yaml and that every level
+# has the 8 mandatory files (docs/contributing.md) and valid mission metadata.
+# Run from the repository root.
 
 set -e
 
-TOTAL_LEVELS=20
 PASSED=0
 FAILED=0
+WORLD_FAILED=0
+TOTAL_LEVELS=0
+LEVEL_NAMES=""
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -14,49 +18,84 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+VALID_CLUSTERS_REGEX='^cluster: *"?(kind|kind-multinode|lima)"?[[:space:]]*$'
+
 echo "=================================================="
-echo "  K8sQuest Levels 1-20 Validation Test"
+echo "  K8sQuest Level Validation Test"
 echo "=================================================="
 echo ""
 
-# Function to test a level
-test_level() {
-    local level_num=$1
-    local level_dir=$2
-    local level_name=$3
-    
-    echo -n "Testing Level $level_num ($level_name)... "
-    
-    # Check if directory exists
-    if [ ! -d "$level_dir" ]; then
-        echo -e "${RED}FAIL${NC} - Directory not found"
-        ((FAILED++))
+# Function to test a world directory (world.yaml)
+test_world() {
+    local world_dir=$1
+    local world_yaml="$world_dir/world.yaml"
+    local problems=()
+
+    echo -n "Testing world $(basename "$world_dir")... "
+
+    if [ ! -f "$world_yaml" ]; then
+        echo -e "${RED}FAIL${NC}"
+        echo "   Missing/Invalid: world.yaml"
+        WORLD_FAILED=$((WORLD_FAILED + 1))
         return 1
     fi
-    
-    # Check required files
+
+    local field
+    for field in order title description cluster requires; do
+        if ! grep -q "^$field:" "$world_yaml"; then
+            problems+=("field '$field'")
+        fi
+    done
+    if ! grep -qE '^order: *[0-9]+[[:space:]]*$' "$world_yaml"; then
+        problems+=("order must be an integer")
+    fi
+    if ! grep -qE "$VALID_CLUSTERS_REGEX" "$world_yaml"; then
+        problems+=("cluster must be kind, kind-multinode or lima")
+    fi
+
+    if [ ${#problems[@]} -eq 0 ]; then
+        echo -e "${GREEN}PASS${NC}"
+        return 0
+    else
+        echo -e "${RED}FAIL${NC}"
+        echo "   Missing/Invalid: ${problems[*]}"
+        WORLD_FAILED=$((WORLD_FAILED + 1))
+        return 1
+    fi
+}
+
+# Function to test a level
+test_level() {
+    local level_dir=$1
+    local level_name
+    level_name=$(basename "$level_dir")
+
+    echo -n "  Testing $level_name... "
+
+    # Check required files (the 8 mandatory files)
     local required_files=(
         "mission.yaml"
         "broken.yaml"
+        "solution.yaml"
         "validate.sh"
         "hint-1.txt"
         "hint-2.txt"
         "hint-3.txt"
         "debrief.md"
     )
-    
+
     local missing_files=()
     for file in "${required_files[@]}"; do
         if [ ! -f "$level_dir/$file" ]; then
             missing_files+=("$file")
         fi
     done
-    
+
     # Check if validate.sh is executable
     if [ -f "$level_dir/validate.sh" ] && [ ! -x "$level_dir/validate.sh" ]; then
         missing_files+=("validate.sh (not executable)")
     fi
-    
+
     # Check mission.yaml has required fields
     if [ -f "$level_dir/mission.yaml" ]; then
         if ! grep -q "^name:" "$level_dir/mission.yaml" || \
@@ -65,48 +104,51 @@ test_level() {
             missing_files+=("mission.yaml (missing required fields)")
         fi
     fi
-    
+
     if [ ${#missing_files[@]} -eq 0 ]; then
         echo -e "${GREEN}PASS${NC}"
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
         return 0
     else
         echo -e "${RED}FAIL${NC}"
         echo "   Missing/Invalid: ${missing_files[*]}"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
         return 1
     fi
 }
 
-# Test World 1: Basics (Levels 1-10)
-echo -e "${YELLOW}World 1: Basics (Levels 1-10)${NC}"
-echo "--------------------------------------"
-test_level 1 "worlds/world-1-basics/level-1-pods" "CrashLoopBackOff"
-test_level 2 "worlds/world-1-basics/level-2-deployments" "Deployment Rollback"
-test_level 3 "worlds/world-1-basics/level-3-imagepull" "ImagePullBackOff"
-test_level 4 "worlds/world-1-basics/level-4-pending" "Pending Pod"
-test_level 5 "worlds/world-1-basics/level-5-labels" "Label Selector"
-test_level 6 "worlds/world-1-basics/level-6-ports" "Wrong Port"
-test_level 7 "worlds/world-1-basics/level-7-multicontainer" "Multi-Container"
-test_level 8 "worlds/world-1-basics/level-8-logs" "Missing Logs"
-test_level 9 "worlds/world-1-basics/level-9-initcontainer" "Init Container"
-test_level 10 "worlds/world-1-basics/level-10-namespace" "Namespace Quota"
-echo ""
+# A directory under worlds/ without world.yaml is invisible to the engine
+for world_dir in worlds/*/; do
+    world_dir=${world_dir%/}
+    if [ ! -f "$world_dir/world.yaml" ]; then
+        test_world "$world_dir" || true
+    fi
+done
 
-# Test World 2: Deployments & Scaling (Levels 11-20)
-echo -e "${YELLOW}World 2: Deployments & Scaling (Levels 11-20)${NC}"
-echo "--------------------------------------"
-test_level 11 "worlds/world-2-deployments/level-11-rollback" "The Rollback"
-test_level 12 "worlds/world-2-deployments/level-12-liveness" "The Restart Loop"
-test_level 13 "worlds/world-2-deployments/level-13-readiness" "Traffic to Unready Pods"
-test_level 14 "worlds/world-2-deployments/level-14-hpa" "HPA Can't Scale"
-test_level 15 "worlds/world-2-deployments/level-15-rollout" "Zero-Downtime Failure"
-test_level 16 "worlds/world-2-deployments/level-16-pdb" "PDB Blocks Evictions"
-test_level 17 "worlds/world-2-deployments/level-17-bluegreen" "Blue-Green Gone Wrong"
-test_level 18 "worlds/world-2-deployments/level-18-canary" "Canary Imbalance"
-test_level 19 "worlds/world-2-deployments/level-19-statefulset" "Stateful App Data Loss"
-test_level 20 "worlds/world-2-deployments/level-20-replicaset" "ReplicaSet Chaos"
-echo ""
+# Worlds sorted by the `order` field in world.yaml
+WORLD_DIRS=$(for y in worlds/*/world.yaml; do
+    printf '%s %s\n' "$(sed -n 's/^order: *\([0-9]*\).*/\1/p' "$y")" "$(dirname "$y")"
+done | sort -n | awk '{print $2}')
+
+for world_dir in $WORLD_DIRS; do
+    echo -e "${YELLOW}$(basename "$world_dir")${NC}"
+    echo "--------------------------------------"
+    test_world "$world_dir" || true
+    for level_dir in "$world_dir"/level-*; do
+        [ -d "$level_dir" ] || continue
+        TOTAL_LEVELS=$((TOTAL_LEVELS + 1))
+        LEVEL_NAMES="$LEVEL_NAMES$(basename "$level_dir")"$'\n'
+        test_level "$level_dir" || true
+    done
+    echo ""
+done
+
+# Level names must be unique across worlds
+DUPLICATES=$(printf '%s' "$LEVEL_NAMES" | sort | uniq -d)
+if [ -n "$DUPLICATES" ]; then
+    echo -e "${RED}Duplicate level names across worlds:${NC} $DUPLICATES"
+    FAILED=$((FAILED + 1))
+fi
 
 # Summary
 echo "=================================================="
@@ -115,11 +157,12 @@ echo "=================================================="
 echo -e "Total Levels Tested: $TOTAL_LEVELS"
 echo -e "${GREEN}Passed: $PASSED${NC}"
 echo -e "${RED}Failed: $FAILED${NC}"
+echo -e "${RED}World problems: $WORLD_FAILED${NC}"
 echo ""
 
-if [ $FAILED -eq 0 ]; then
+if [ $FAILED -eq 0 ] && [ $WORLD_FAILED -eq 0 ]; then
     echo -e "${GREEN}✅ All levels validated successfully!${NC}"
-    echo "All 20 levels are ready to play."
+    echo "All $TOTAL_LEVELS levels are ready to play."
     exit 0
 else
     echo -e "${RED}❌ Some levels have issues.${NC}"

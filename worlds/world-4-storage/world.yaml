@@ -1,0 +1,5 @@
+order: 4
+title: "Storage & Stateful Apps"
+description: "Volumes, claims, storage classes, StatefulSets, ConfigMaps and Secrets."
+cluster: kind
+requires: []

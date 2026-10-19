@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# Audit all 50 levels for validation and namespace issues
+# Audit every level under worlds/ for validation and namespace issues
 
-echo "🔍 Auditing all 50 K8sQuest levels..."
+LEVEL_COUNT=$(ls -d worlds/*/level-* | wc -l | tr -d ' ')
+
+echo "🔍 Auditing all $LEVEL_COUNT K8sQuest levels..."
 echo "======================================"
 echo ""
 

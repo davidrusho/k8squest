@@ -1,0 +1,5 @@
+order: 2
+title: "Deployments & Scaling"
+description: "Rollouts, rollbacks, probes, autoscaling, disruption budgets and release strategies."
+cluster: kind
+requires: []

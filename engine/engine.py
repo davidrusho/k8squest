@@ -31,6 +31,8 @@ else:  # Unix/Linux/Mac
     import tty
     import termios
 
+from world_discovery import discover_worlds, total_levels, total_xp
+
 # Import retro UI components
 try:
     from retro_ui import (
@@ -317,6 +319,15 @@ class K8sQuest:
         self.base_dir = Path(__file__).parent.parent
         self.progress_file = self.base_dir / "progress.json"
         self.progress = self.load_progress()
+        # Worlds, level count and XP total come from worlds/*/world.yaml and
+        # the mission.yaml files on disk, never from constants in this file.
+        self.worlds = discover_worlds(self.base_dir)
+        self.total_levels = total_levels(self.worlds)
+        self.total_xp = total_xp(self.worlds)
+
+    def world_dir_names(self):
+        """World directory names in play order."""
+        return [world.dir_name for world in self.worlds]
 
     def load_progress(self):
         """Load player progress from JSON file"""
@@ -374,11 +385,13 @@ class K8sQuest:
         stats.add_row("🎮 PLAYER", self.progress["player_name"])
         stats.add_row("💎 TOTAL XP", str(self.progress["total_xp"]))
         stats.add_row(
-            "⭐ LEVELS CLEARED", f"{len(self.progress['completed_levels'])}/50"
+            "⭐ LEVELS CLEARED", f"{len(self.progress['completed_levels'])}/{self.total_levels}"
         )
 
         # Calculate completion percentage
-        completion = (len(self.progress["completed_levels"]) / 50) * 100
+        completion = (
+            len(self.progress["completed_levels"]) / max(self.total_levels, 1)
+        ) * 100
         progress_bar = "█" * int(completion / 5) + "░" * (20 - int(completion / 5))
         stats.add_row("📊 PROGRESS", f"[{progress_bar}] {completion:.0f}%")
 
@@ -403,7 +416,7 @@ class K8sQuest:
         # Show XP progress bar
         if RETRO_UI_ENABLED:
             console.print()
-            console.print(show_xp_bar(self.progress["total_xp"], 10200))
+            console.print(show_xp_bar(self.progress["total_xp"], self.total_xp))
 
         # Show safety reminder if enabled with gaming theme
         if SAFETY_ENABLED:
@@ -1206,12 +1219,12 @@ Look for "2/2" ready replicas!
                         completed_count = len(self.progress["completed_levels"])
                         if completed_count == 10:
                             celebrate_milestone("world_complete")
-                        elif completed_count == 25:
+                        elif completed_count == self.total_levels // 2:
                             celebrate_milestone("halfway")
-                        elif completed_count == 49:
+                        elif completed_count == self.total_levels - 1:
                             celebrate_milestone("final_boss")
-                        elif completed_count == 50:
-                            show_game_complete()
+                        elif completed_count == self.total_levels:
+                            show_game_complete(self.total_levels)
 
                     # Show debrief - THE LEARNING MOMENT!
                     self.show_debrief(level_path)
@@ -1269,28 +1282,11 @@ Look for "2/2" ready replicas!
 
         # Get all worlds and their levels
         worlds = {}
-        all_worlds = [
-            "world-1-basics",
-            "world-2-deployments",
-            "world-3-networking",
-            "world-4-storage",
-            "world-5-security",
-        ]
-
-        def natural_sort_key(path):
-            """Extract numbers from path for natural sorting"""
-            parts = re.split(r"(\d+)", path.name)
-            return [int(part) if part.isdigit() else part for part in parts]
+        all_worlds = self.world_dir_names()
 
         # Collect all levels from all worlds
-        for world_name in all_worlds:
-            world_path = self.base_dir / "worlds" / world_name
-            if world_path.exists():
-                levels = sorted(
-                    [d for d in world_path.iterdir() if d.is_dir()],
-                    key=natural_sort_key,
-                )
-                worlds[world_name] = levels
+        for world in self.worlds:
+            worlds[world.dir_name] = [level.path for level in world.levels]
 
         # Display all levels organized by world
         console.clear()
@@ -1306,8 +1302,8 @@ Look for "2/2" ready replicas!
             if world_name not in worlds:
                 continue
 
-            world_display = (
-                world_name.replace("world-", "World ").replace("-", " ").title()
+            world_display = next(
+                w.display_name for w in self.worlds if w.dir_name == world_name
             )
             console.print(f"\n[bold yellow]{world_display}[/bold yellow]")
 
@@ -1369,13 +1365,7 @@ Look for "2/2" ready replicas!
                     self.play_specific_level()  # Recursive call to play another
                 elif next_choice == "2":
                     # Continue from this world
-                    all_worlds_list = [
-                        "world-1-basics",
-                        "world-2-deployments",
-                        "world-3-networking",
-                        "world-4-storage",
-                        "world-5-security",
-                    ]
+                    all_worlds_list = self.world_dir_names()
                     start_world_index = all_worlds_list.index(world_name)
                     for world in all_worlds_list[start_world_index:]:
                         if not self.play_world(world):
@@ -1391,23 +1381,14 @@ Look for "2/2" ready replicas!
 
     def play_world(self, world_name):
         """Play all levels in a world"""
-        world_path = self.base_dir / "worlds" / world_name
+        world = next((w for w in self.worlds if w.dir_name == world_name), None)
 
-        if not world_path.exists():
+        if world is None:
             console.print(f"[red]Error: World '{world_name}' not found[/red]")
             return False
 
-        # Get all level directories with natural sorting (level-1, level-2, ..., level-10)
-        import re
-
-        def natural_sort_key(path):
-            """Extract numbers from path for natural sorting"""
-            parts = re.split(r"(\d+)", path.name)
-            return [int(part) if part.isdigit() else part for part in parts]
-
-        levels = sorted(
-            [d for d in world_path.iterdir() if d.is_dir()], key=natural_sort_key
-        )
+        # Levels are already in natural order (level-1, level-2, ..., level-10)
+        levels = [level.path for level in world.levels]
 
         # Find where to resume from
         start_index = 0
@@ -1479,14 +1460,8 @@ def main():
 
     game.show_welcome()
 
-    # All 5 worlds in order
-    all_worlds = [
-        "world-1-basics",
-        "world-2-deployments",
-        "world-3-networking",
-        "world-4-storage",
-        "world-5-security",
-    ]
+    # All worlds in order, discovered from worlds/*/world.yaml
+    all_worlds = game.world_dir_names()
 
     # Check if there's progress to resume
     has_progress = len(game.progress["completed_levels"]) > 0 or game.progress.get(

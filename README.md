@@ -8,7 +8,7 @@ Learn Kubernetes by fixing it.
 
 K8sQuest is a **local, game-based Kubernetes training platform** with an interactive GUI-like terminal interface. Each mission breaks something in Kubernetes. Your job is to fix it.
 
-**50 progressive challenges across 5 worlds** - from beginner to advanced.
+**50 progressive challenges across 5 worlds** - from beginner to advanced. Worlds 6-8 (Cluster Architecture, Troubleshooting on multi-node clusters, and kubeadm on Lima VMs) are in progress.
 
 No cloud. No AWS. No costs.
 
@@ -235,22 +235,22 @@ python3 engine/reset.py all
 ## 📚 Learning Path
 
 ### 🎯 World 1: Core Kubernetes Basics (Levels 1-10) 
-**Difficulty**: Beginner | **Total XP**: 1,000  
+**Difficulty**: Beginner | **Total XP**: 1,500  
 Master the fundamentals of Kubernetes debugging and troubleshooting.
 
-- ✅ Level 1: CrashLoopBackOff Challenge (100 XP)
-- ✅ Level 2: Deployment Zero Replicas (100 XP)
+- ✅ Level 1: Fix the Crashing Pod (100 XP)
+- ✅ Level 2: Fix the Deployment (150 XP)
 - ✅ Level 3: ImagePullBackOff Mystery (100 XP)
-- ✅ Level 4: Pending Pod Problem (100 XP)
-- ✅ Level 5: Lost Connection - Labels & Selectors (100 XP)
+- ✅ Level 4: Pending Pod Problem (150 XP)
+- ✅ Level 5: Lost Connection - Labels & Selectors (150 XP)
 - ✅ Level 6: Port Mismatch Mayhem (100 XP)
-- ✅ Level 7: Sidecar Sabotage (100 XP)
-- ✅ Level 8: Pod Logs Mystery (100 XP)
-- ✅ Level 9: Init Container Gridlock (100 XP)
-- ✅ Level 10: Namespace Confusion (100 XP)
+- ✅ Level 7: Sidecar Sabotage (200 XP)
+- ✅ Level 8: Pod Logs Mystery (150 XP)
+- ✅ Level 9: Init Container Gridlock (200 XP)
+- ✅ Level 10: Namespace Confusion (200 XP)
 
 ### 🏆 World 2: Deployments & Scaling (Levels 11-20) 
-**Difficulty**: Intermediate | **Total XP**: 1,350  
+**Difficulty**: Intermediate | **Total XP**: 2,050  
 Master deployment strategies, scaling, and health checks.
 
 - ✅ Rolling updates, rollbacks, HPA, liveness/readiness probes
@@ -258,7 +258,7 @@ Master deployment strategies, scaling, and health checks.
 - ✅ Resource management, pod lifecycle, and production patterns
 
 ### 🏆 World 3: Networking & Services (Levels 21-30) 
-**Difficulty**: Intermediate | **Total XP**: 2,100  
+**Difficulty**: Intermediate | **Total XP**: 2,300  
 Master service discovery, load balancing, and network policies.
 
 - ✅ ClusterIP, NodePort, LoadBalancer services
@@ -266,7 +266,7 @@ Master service discovery, load balancing, and network policies.
 - ✅ Session affinity, cross-namespace communication, headless services
 
 ### 🏆 World 4: Storage & Stateful Apps (Levels 31-40) 
-**Difficulty**: Advanced | **Total XP**: 2,600  
+**Difficulty**: Advanced | **Total XP**: 2,450  
 Master persistent storage, StatefulSets, and configuration management.
 
 - ✅ PersistentVolumes, PVCs, access modes, StorageClasses
@@ -274,7 +274,7 @@ Master persistent storage, StatefulSets, and configuration management.
 - ✅ ConfigMaps, Secrets, and production storage patterns
 
 ### 🏆 World 5: Security & Production Ops (Levels 41-50) 
-**Difficulty**: Advanced | **Total XP**: 3,150  
+**Difficulty**: Advanced | **Total XP**: 3,300  
 Production-ready Kubernetes: RBAC, security, resource management, and chaos engineering.
 
 - ✅ RBAC (ServiceAccounts, Roles, RoleBindings)
@@ -283,7 +283,9 @@ Production-ready Kubernetes: RBAC, security, resource management, and chaos engi
 - ✅ Taints/Tolerations, PodDisruptionBudgets, PriorityClass
 - ✅ **Level 50**: 🔥 **The Chaos Finale** - 9 simultaneous failures in a production scenario!
 
-**Total Journey**: 50 Levels | 10,200 XP | Beginner → Kubernetes Master 🏆
+**Today**: 5 worlds, 50 levels, 11,600 XP in total (summed from the `mission.yaml` files) | Beginner → Advanced
+
+**In progress**: World 6 (Cluster Architecture), World 7 (Troubleshooting on multi-node kind), World 8 (kubeadm on Lima VMs). New worlds are discovered from `worlds/<world>/world.yaml`, so the game picks them up as they land.
 
 📖 **Full Blueprint**: See [docs/50-CHALLENGE-BLUEPRINT.md](docs/50-CHALLENGE-BLUEPRINT.md) for detailed descriptions of all 50 challenges.
 

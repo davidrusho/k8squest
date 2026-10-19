@@ -1,0 +1,8 @@
+# Single control-plane cluster used by Worlds whose world.yaml says `cluster: kind`.
+# The node image is pinned to the kind v0.33.0 default (Kubernetes v1.37.0);
+# kind's release notes make the digest part of the image reference.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5

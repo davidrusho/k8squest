@@ -1,0 +1,5 @@
+order: 3
+title: "Networking & Services"
+description: "Services, DNS, Ingress, network policies and endpoints."
+cluster: kind
+requires: []

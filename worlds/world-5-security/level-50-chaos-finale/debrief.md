@@ -28,39 +28,39 @@ You simultaneously fixed:
 - Pods, Deployments, Services
 - ConfigMaps, Secrets
 - Probes, Init Containers
-- **1,000 XP**
+- **1,500 XP**
 
 ### World 2: Deployments & Scaling (Levels 11-20)
 - Rolling Updates, Rollbacks
 - Horizontal Pod Autoscaling
 - Resource Management
-- **1,350 XP**
+- **2,050 XP**
 
 ### World 3: Networking & Services (Levels 21-30)
 - ClusterIP, NodePort, LoadBalancer
 - Ingress Controllers
 - DNS, Service Discovery
-- **2,100 XP**
+- **2,300 XP**
 
 ### World 4: Storage & Stateful Apps (Levels 31-40)
 - PersistentVolumes, PersistentVolumeClaims
 - StatefulSets
 - StorageClasses, Volume Permissions
-- **2,600 XP**
+- **2,450 XP**
 
 ### World 5: Security & Production Ops (Levels 41-50)
 - RBAC, SecurityContext
 - ResourceQuota, NetworkPolicy
 - Node Scheduling, Taints
 - PDB, Pod Security, Priority
-- **3,150 XP**
+- **3,300 XP**
 
 ---
 
 ## 📊 Final Stats
 
 - **Total Levels**: 50
-- **Total XP**: 10,200 XP
+- **Total XP**: 11,600 XP
 - **Concepts Mastered**: 50+
 - **Files Created**: 400
 - **Real-World Incidents Studied**: 10+
@@ -81,9 +81,10 @@ You simultaneously fixed:
 
 ### Continue Your Journey
 
-1. **CKA Certification** - You're ready!
-2. **CKAD Certification** - Application developer focus
-3. **CKS Certification** - Security specialist
+1. **World 6: Cluster Architecture** (in progress) - Helm, Kustomize, CRDs and operators, Gateway API, VPA
+2. **World 7: Troubleshooting on multi-node clusters** (in progress) - the exam's heaviest domain
+3. **World 8: kubeadm on Lima VMs** (in progress) - build and repair a real cluster
+4. **Certifications** - the CKA, CKAD and CKS exams test more than Worlds 1-5 cover; see `docs/LEARNING-PATH.md` for the domain-by-domain mapping
 
 ### Build Real Projects
 
