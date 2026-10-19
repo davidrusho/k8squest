@@ -1,0 +1,26 @@
+level: 58
+title: "RBAC: The Binding That Binds Nobody"
+name: "RBAC: The Binding That Binds Nobody"
+objective: "Make the reports-pod API calls succeed by fixing the RoleBinding, without widening permissions"
+world: "Cluster Architecture & Extensions"
+difficulty: "advanced"
+xp: 300
+expected_time: "10-15 minutes"
+concepts:
+  - rbac
+  - serviceaccount
+  - rolebinding
+  - subjects
+description: |
+  The reports-pod pod calls the Kubernetes API with its ServiceAccount's token
+  to list ConfigMaps. Every call returns HTTP 403.
+
+  Unlike a missing Role, here everything seems to exist: the ServiceAccount
+  reports-sa, a Role that allows reading ConfigMaps, and a RoleBinding that
+  ties them together. Work out why the API server still says no, and fix it
+  without granting more than ConfigMap read access.
+learning_objectives:
+  - Test what an identity may do with kubectl auth can-i --as=system:serviceaccount:<ns>:<name>
+  - Read a RoleBinding's subjects, including the namespace of a ServiceAccount
+  - Tell "no binding" apart from "binding to a different subject"
+  - Fix the binding without escalating to cluster-admin

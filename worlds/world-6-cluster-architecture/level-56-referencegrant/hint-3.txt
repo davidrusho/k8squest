@@ -1,0 +1,20 @@
+✅ HINT 3: Complete Solution
+
+Change `from.namespace` from `default` to `k8squest`:
+
+   apiVersion: gateway.networking.k8s.io/v1beta1
+   kind: ReferenceGrant
+   metadata:
+     name: allow-routes
+     namespace: k8squest-backend
+   spec:
+     from:
+     - group: gateway.networking.k8s.io
+       kind: HTTPRoute
+       namespace: k8squest
+     to:
+     - group: ""
+       kind: Service
+
+   kubectl apply -f solution.yaml
+   kubectl get httproute shop-route -n k8squest -o jsonpath='{.status.parents[0].conditions}'

@@ -1,0 +1,11 @@
+🎯 HINT 2: Two Ways Out
+
+Helm keeps every revision of a release, so you can go back or go forward:
+
+• Go back:    helm rollback <RELEASE> [REVISION]
+• Go forward: helm upgrade <RELEASE> <CHART> with corrected values
+
+Editing the Deployment directly (kubectl edit / set image) is a trap: the
+pods may recover, but Helm still believes revision 2 is what is deployed.
+
+💡 Check which revision has the good image tag before you pick one.

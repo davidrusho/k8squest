@@ -1,0 +1,12 @@
+✅ HINT 3: Complete Solution
+
+Fix the subject's namespace (do not create a ClusterRoleBinding or bind a
+bigger Role; validation checks that nothing else was opened up):
+
+   subjects:
+   - kind: ServiceAccount
+     name: reports-sa
+     namespace: k8squest      # was: default
+
+   kubectl apply -f solution.yaml
+   kubectl logs reports-pod -n k8squest --tail=2     # HTTP 200 within ~5 seconds

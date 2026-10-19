@@ -1,0 +1,15 @@
+# The ReferenceGrant lives in the namespace of the Service (k8squest-backend)
+# and must name the namespace the HTTPRoute lives in (k8squest).
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-routes
+  namespace: k8squest-backend
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: k8squest      # ✅ where shop-route lives
+  to:
+  - group: ""
+    kind: Service

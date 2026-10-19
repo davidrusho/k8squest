@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hamster
+  namespace: k8squest
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hamster
+  template:
+    metadata:
+      labels:
+        app: hamster
+    spec:
+      containers:
+      - name: hamster
+        image: busybox:1.37
+        # burns some CPU so the recommender has something to measure
+        command: ["sh", "-c", "while true; do :; done"]
+        resources:
+          requests:
+            cpu: 25m
+            memory: 16Mi
+          limits:
+            cpu: 200m
+            memory: 64Mi
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: hamster-vpa
+  namespace: k8squest
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hamster-app   # ❌ no Deployment has this name; the workload is "hamster"
+  updatePolicy:
+    updateMode: "Off"   # recommend only: never evict pods

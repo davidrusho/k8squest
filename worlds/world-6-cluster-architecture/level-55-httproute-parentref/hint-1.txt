@@ -1,0 +1,18 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ Is the route attached? Read its status:
+   kubectl get httproute -n k8squest
+   kubectl describe httproute echo-route -n k8squest
+   Look at Status > Parents > Conditions (Accepted, ResolvedRefs).
+   An empty status is itself a clue: nothing has claimed the route.
+
+2️⃣ Which Gateways exist, and what are they called?
+   kubectl get gateway -n k8squest
+   kubectl get gatewayclass
+
+3️⃣ And the backend:
+   kubectl get svc echo -n k8squest
+
+🤔 Questions:
+• Does the route's parentRefs name match a Gateway?
+• Does the route's backend port match the Service?

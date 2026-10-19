@@ -1,0 +1,10 @@
+🎯 HINT 2: Issuer versus ClusterIssuer
+
+A Certificate picks its issuer through spec.issuerRef (name, kind, group).
+
+• Issuer         is namespaced: only Certificates in the same namespace can use it.
+• ClusterIssuer  is cluster-wide: usable from any namespace.
+
+The default kind is Issuer. Compare:
+   kubectl get certificate web-cert -n k8squest -o jsonpath='{.spec.issuerRef}'
+with the objects from `kubectl get issuer,clusterissuer -A`.

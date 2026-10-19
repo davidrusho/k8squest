@@ -7,7 +7,8 @@ assert validate.sh PASSES (retried up to a timeout).
 
 Engine lines mirrored (engine/engine.py):
   ~896-905  `kubectl apply -f -` of Namespace k8squest (idempotent)
-  ~912-916  `kubectl delete all --all -n k8squest --ignore-not-found`
+  ~912-916  `kubectl delete all --all -n k8squest --ignore-not-found`, then
+            engine/level_reset.py clear_leftovers (quotas, RBAC, config, PVCs, taints)
   ~922-935  if setup.sh exists: `bash setup.sh` with cwd=level dir, and broken.yaml
             is NOT applied by the engine (setup.sh must do it); else
             `kubectl apply -f broken.yaml`
@@ -20,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "engine"))
+from level_reset import clear_leftovers, describe_failures  # noqa: E402
 from world_discovery import discover_worlds  # noqa: E402
 
 NS = os.environ.get("K8SQUEST_NAMESPACE", "k8squest")
@@ -69,15 +71,16 @@ def kube_env():
 
 
 def isolate():
-    """Optional (--isolate): wipe what the engine's `delete all` leaves behind
-    (quotas, netpols, PVCs, configmaps, node taints/labels) so cross-level
-    contamination can be told apart from a bug in the level itself."""
+    """Optional (--isolate): also delete the whole namespace between levels
+    (diagnostic; the engine does not)."""
     run(["kubectl", "delete", "namespace", NS, "--ignore-not-found", "--wait=true"], timeout=240)
-    run(["bash", "-c", "kubectl taint nodes --all dedicated- 2>/dev/null; "
-         "kubectl label nodes --all accelerator- 2>/dev/null; true"])
 
 
 ISOLATE = False
+
+
+def _w(warn):
+    return f"; {warn}" if warn else ""
 
 
 def reset(level_path):
@@ -88,20 +91,22 @@ def reset(level_path):
     if r.returncode:
         return False, "ns apply: " + r.stderr[-200:]
     run(["kubectl", "delete", "all", "--all", "-n", NS, "--ignore-not-found"], timeout=180)
+    reset_failed = clear_leftovers(NS)   # same leftover reset the engine does after `delete all`
+    warn = ("reset warnings: " + describe_failures(reset_failed)) if reset_failed else ""
     setup = level_path / "setup.sh"
     if setup.exists():
         r = run(["bash", "setup.sh"], cwd=str(level_path), timeout=SETUP_TIMEOUT)
         if r.returncode:
             return False, "setup.sh failed: " + (r.stderr or r.stdout)[-200:]
         if "broken.yaml" not in setup.read_text(errors="replace"):
-            return True, "setup.sh never applies broken.yaml (engine skips it)"
-        return True, ""
+            return True, "setup.sh never applies broken.yaml (engine skips it)" + _w(warn)
+        return True, warn
     r = run(["kubectl", "apply", "-f", str(level_path / "broken.yaml")])
     if r.returncode:
         # the engine aborts here ("Deployment failed", returns False); the
         # harness records it and carries on so the fix path is still tested
-        return True, "ENGINE ABORTS (broken apply rc!=0): " + r.stderr.strip()[-110:]
-    return True, ""
+        return True, "ENGINE ABORTS (broken apply rc!=0): " + r.stderr.strip()[-110:] + _w(warn)
+    return True, warn
 
 
 def validate(level_path):
@@ -163,7 +168,7 @@ def main():
     ap.add_argument("--world")
     ap.add_argument("--keep-cluster", action="store_true")
     ap.add_argument("--isolate", action="store_true",
-                    help="wipe namespace and node taints/labels between levels (diagnostic; the engine does not)")
+                    help="delete the whole namespace between levels (diagnostic; the engine does not)")
     ap.add_argument("--solution", help="override solution file (used to prove the harness can fail)")
     a = ap.parse_args()
     global ISOLATE

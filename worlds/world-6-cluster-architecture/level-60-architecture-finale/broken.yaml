@@ -1,0 +1,139 @@
+# --- Fault area 1: TLS (cert-manager) ---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: platform-issuer
+  namespace: k8squest
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: platform-cert
+  namespace: k8squest
+spec:
+  secretName: platform-cert-tls
+  dnsNames:
+  - api.k8squest.example
+  issuerRef:
+    name: platform-issuer-ca   # ❌ the Issuer is called platform-issuer
+    kind: Issuer
+---
+# --- Fault area 2: routing (Gateway API) ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: k8squest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: web
+        image: nginx:1.27-alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: k8squest
+spec:
+  selector:
+    app: api
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-route
+  namespace: k8squest
+spec:
+  parentRefs:
+  - name: web-gw
+    sectionName: https   # ❌ web-gw only has a listener named "http"
+  rules:
+  - backendRefs:
+    - name: api
+      port: 80
+---
+# --- Fault area 3: access control (RBAC) ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: probe-sa
+  namespace: k8squest
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-settings
+  namespace: k8squest
+data:
+  region: kind-local
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: settings-reader
+  namespace: k8squest
+rules:
+- apiGroups: [""]
+  resources: ["configmap"]   # ❌ not a resource name; the API resource is plural
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: probe-binding
+  namespace: k8squest
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: settings-reader
+subjects:
+- kind: ServiceAccount
+  name: probe-sa
+  namespace: k8squest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: probe
+  namespace: k8squest
+spec:
+  serviceAccountName: probe-sa
+  containers:
+  - name: client
+    image: curlimages/curl:8.23.0
+    command:
+    - sh
+    - -c
+    - |
+      SA=/var/run/secrets/kubernetes.io/serviceaccount
+      while true; do
+        code=$(curl -s -o /dev/null -w '%{http_code}' --cacert $SA/ca.crt \
+          -H "Authorization: Bearer $(cat $SA/token)" \
+          https://kubernetes.default.svc/api/v1/namespaces/$(cat $SA/namespace)/configmaps)
+        echo "$(date +%T) GET configmaps -> HTTP $code"
+        sleep 5
+      done
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi

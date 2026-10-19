@@ -1,0 +1,6 @@
+apiVersion: v2
+name: webapp
+description: A small web application used by the K8sQuest Helm level
+type: application
+version: 0.1.0
+appVersion: "1.27"

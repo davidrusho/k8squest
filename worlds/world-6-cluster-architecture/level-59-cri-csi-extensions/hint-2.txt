@@ -1,0 +1,18 @@
+🎯 HINT 2: Names that must resolve to real components
+
+• StorageClass.provisioner names the driver that creates volumes (CSI or in-tree).
+  The class `standard` that kind ships uses rancher.io/local-path.
+• RuntimeClass.handler names a runtime handler configured in the node's CRI
+  runtime (containerd here). The default handler is `runc`.
+
+Pod events show the runtime error ("no runtime for ... is configured") once
+the pod is scheduled.
+
+Both fields are immutable: you must delete and recreate the objects.
+   kubectl delete storageclass fast-local
+   kubectl delete runtimeclass sandboxed
+
+Recreate them from YAML that keeps the label the game put on them,
+`app.kubernetes.io/part-of: k8squest` (solution.yaml does). If you recreate one
+without the label, the level's setup will refuse to touch it when you restart
+the level, and tell you the exact `kubectl delete` command to run first.

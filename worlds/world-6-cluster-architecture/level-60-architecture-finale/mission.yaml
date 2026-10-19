@@ -1,0 +1,29 @@
+level: 60
+title: "FINALE: The Platform Handover"
+name: "FINALE: The Platform Handover"
+objective: "Fix every fault in the platform namespace: the certificate, the route and the pod's API access"
+world: "Cluster Architecture & Extensions"
+difficulty: "expert"
+xp: 500
+expected_time: "25-40 minutes"
+concepts:
+  - cert-manager
+  - gateway-api
+  - httproute
+  - rbac
+  - troubleshooting
+description: |
+  🚨 The platform team has handed over a namespace that "mostly works". It does not:
+
+  • The Certificate platform-cert never becomes Ready.
+  • The HTTPRoute api-route is not routing to the api Service.
+  • The probe pod is told 403 Forbidden when it reads ConfigMaps.
+
+  Three components from this world, three independent faults. Diagnose each
+  one from the cluster's own status and events, fix all of them, and change
+  nothing else (no extra permissions, no replaced Gateway).
+learning_objectives:
+  - Triage several independent failures by reading status conditions, events and logs
+  - Fix a cert-manager issuerRef, a Gateway API parentRef sectionName and an RBAC rule
+  - Recognise a silent mistake (a Role that names a resource that does not exist)
+  - Verify each fix from the same source that revealed the fault

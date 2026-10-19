@@ -1,0 +1,21 @@
+# A namespaced self-signed Issuer, and a Certificate that asks for it.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-issuer
+  namespace: k8squest
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: web-cert
+  namespace: k8squest
+spec:
+  secretName: web-cert-tls
+  dnsNames:
+  - web.k8squest.example
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer   # ❌ the issuer in this namespace is an Issuer, not a ClusterIssuer

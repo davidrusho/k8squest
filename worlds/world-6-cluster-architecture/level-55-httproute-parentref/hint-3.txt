@@ -1,0 +1,12 @@
+✅ HINT 3: Complete Solution
+
+   spec:
+     parentRefs:
+     - name: web-gw        # was web-gateway
+     rules:
+     - backendRefs:
+       - name: echo
+         port: 80          # was 8080
+
+   kubectl apply -f solution.yaml
+   kubectl get httproute echo-route -n k8squest -o jsonpath='{.status.parents[0].conditions}'

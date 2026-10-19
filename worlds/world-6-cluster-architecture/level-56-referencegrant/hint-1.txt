@@ -1,0 +1,14 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ Read the route's conditions:
+   kubectl describe httproute shop-route -n k8squest
+   What reason does ResolvedRefs give?
+
+2️⃣ Where is the backend?
+   kubectl get svc -A | grep catalog
+
+3️⃣ Is there any grant that allows the reference?
+   kubectl get referencegrant -A
+   kubectl get referencegrant -n k8squest-backend -o yaml
+
+🤔 Question: whose namespace is the grant in, and who does it say may reference the Service?

@@ -1,0 +1,16 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ Start with the pod and its claim:
+   kubectl get pod,pvc -n k8squest
+   kubectl describe pvc ledger-data -n k8squest
+   kubectl describe pod -l app=ledger -n k8squest
+
+2️⃣ What does this cluster actually provide?
+   kubectl get storageclass
+   kubectl get runtimeclass
+
+3️⃣ Compare each with what the Deployment and PVC ask for.
+
+🤔 Questions:
+• Which provisioner does the "fast-local" StorageClass name? Is that driver installed?
+• Fix one and look again: is there a second, different symptom?

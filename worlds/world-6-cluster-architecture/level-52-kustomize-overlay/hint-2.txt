@@ -1,0 +1,11 @@
+🎯 HINT 2: How a patch finds its target
+
+In kustomization.yaml, each entry under `patches:` has a `path` (the patch)
+and an optional `target` (which resources to patch). The target selects
+resources by group, version, kind, name, namespace and label/annotation selectors.
+
+If the target matches nothing, Kustomize does not complain. The patch is skipped.
+
+💡 Look at kustomize/overlays/prod/kustomization.yaml in
+   $HOME/.k8squest/work/level-52-kustomize-overlay and compare `target.name` with
+   `metadata.name` in kustomize/base/deployment.yaml.

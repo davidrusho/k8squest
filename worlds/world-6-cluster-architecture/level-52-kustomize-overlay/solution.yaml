@@ -1,0 +1,16 @@
+# Level 52 has no manifest solution: validation compares the cluster with what
+# YOUR copy of the overlay renders, so the overlay itself has to be fixed.
+#
+# In $HOME/.k8squest/work/level-52-kustomize-overlay/kustomize/overlays/prod/kustomization.yaml
+# change the patch target:
+#
+#   patches:
+#   - path: replicas-and-logging.yaml
+#     target:
+#       kind: Deployment
+#       name: shop-web        # was: shop-web-prod
+#
+# then render, and apply the overlay:
+#   cd "$HOME/.k8squest/work/level-52-kustomize-overlay"
+#   kubectl kustomize kustomize/overlays/prod
+#   kubectl apply -k kustomize/overlays/prod

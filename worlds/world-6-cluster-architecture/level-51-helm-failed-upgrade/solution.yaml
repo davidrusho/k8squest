@@ -1,0 +1,14 @@
+# Level 51 has no manifest solution: the fix is a Helm operation, because the
+# thing that is broken is the release's recorded revision, not just the
+# Deployment object.
+#
+# Option 1 - roll back to the last good revision:
+#   helm history webapp -n k8squest
+#   helm rollback webapp 1 -n k8squest
+#
+# Option 2 - upgrade again with the typo fixed, keeping the other values:
+#   helm upgrade webapp "$HOME/.k8squest/work/level-51-helm-failed-upgrade/chart" -n k8squest \
+#     --reset-values --set image.tag=1.27-alpine
+#
+# (kubectl edit / kubectl set image on the Deployment does NOT fix the release:
+# Helm still records the bad values, and the next upgrade would bring them back.)

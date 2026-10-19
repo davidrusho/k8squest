@@ -1,0 +1,17 @@
+✅ HINT 3: Complete Solution
+
+In $HOME/.k8squest/work/level-52-kustomize-overlay/kustomize/overlays/prod/kustomization.yaml,
+change the patch target:
+
+   patches:
+   - path: replicas-and-logging.yaml
+     target:
+       kind: Deployment
+       name: shop-web        # was: shop-web-prod
+
+Check the render, then apply the overlay:
+
+   cd "$HOME/.k8squest/work/level-52-kustomize-overlay"
+   kubectl kustomize kustomize/overlays/prod | grep -E "replicas|LOG_LEVEL" -A1
+   kubectl apply -k kustomize/overlays/prod
+   kubectl rollout status deployment/shop-web -n k8squest

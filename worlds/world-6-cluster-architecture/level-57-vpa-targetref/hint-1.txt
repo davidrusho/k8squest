@@ -1,0 +1,15 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ Does the VPA say anything?
+   kubectl get vpa -n k8squest
+   kubectl describe vpa hamster-vpa -n k8squest
+   Look at Status > Conditions.
+
+2️⃣ Are the pods being measured?
+   kubectl get deployment,pods -n k8squest
+   kubectl top pods -n k8squest
+
+3️⃣ What does the VPA think it is targeting?
+   kubectl get vpa hamster-vpa -n k8squest -o jsonpath='{.spec.targetRef}'
+
+🤔 Question: does that name match a controller that exists?

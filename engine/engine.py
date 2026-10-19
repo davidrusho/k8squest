@@ -19,6 +19,7 @@ from rich import box
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
+from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 from rich.prompt import Confirm, Prompt
@@ -32,6 +33,7 @@ else:  # Unix/Linux/Mac
     import tty
     import termios
 
+from level_reset import clear_leftovers, describe_failures, expected_context
 from world_discovery import discover_worlds, milestones_for, total_levels, total_xp
 
 # Import retro UI components
@@ -89,9 +91,7 @@ if not os.environ.get("KUBECONFIG"):
 
 def get_expected_context():
     """Return the expected kubectl context name based on cluster type."""
-    if K8S_CLUSTER_TYPE == "k3s":
-        return "k3s-k8squest"
-    return "kind-k8squest"
+    return expected_context()
 
 console = Console()
 
@@ -921,6 +921,13 @@ Look for "2/2" ready replicas!
                 ["kubectl", "delete", "all", "--all", "-n", K8SQUEST_NAMESPACE, "--ignore-not-found"],
                 capture_output=True, text=True,
             )
+            # `delete all` leaves quotas, RBAC, config, PVCs, node taints and labels behind
+            reset_failed = clear_leftovers(K8SQUEST_NAMESPACE)
+            if reset_failed:
+                console.print(
+                    f"[yellow]⚠️  Some leftovers from earlier levels could not be cleared: "
+                    f"{escape(describe_failures(reset_failed))}[/yellow]"
+                )
 
             progress.update(task, description="Deploying broken resources...")
             progress.advance(task)

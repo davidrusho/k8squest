@@ -28,9 +28,9 @@
                     ▼                       ▼
         ┌───────────────────┐   ┌───────────────────┐
         │  Safety Module    │   │  Mission Content  │
-        │  (safety.py)      │   │  (Worlds 1-5)     │
+        │  (safety.py)      │   │  (Worlds 1-6)     │
         │                   │   │                   │
-        │  • Pattern Match  │   │  • 50 Levels      │
+        │  • Pattern Match  │   │  • 60 Levels      │
         │  • RBAC Check     │   │  • Broken Configs │
         │  • Confirmation   │   │  • Solutions      │
         └───────────────────┘   │  • Hints          │
@@ -185,6 +185,17 @@ Layer 3: Namespace Isolation (Kubernetes)
 │          LimitRanges, PSP, Node Affinity, Taints,          │
 │          🔥 CHAOS FINALE (Level 50)                        │
 └─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  WORLD 6: Cluster Architecture & Extensions (Levels 51-60)  │
+│  Difficulty: ⭐⭐⭐ Intermediate to Expert                  │
+│  XP: 3,250                                                  │
+│  Status: COMPLETE                                           │
+│                                                             │
+│  Topics: Helm, Kustomize, CRDs, cert-manager, Gateway API, │
+│          VPA, ServiceAccount RBAC, RuntimeClass/StorageClass│
+│          🔥 FINALE (Level 60)                              │
+└─────────────────────────────────────────────────────────────┘
 
 ═══════════════════════════════════════════════════════════════════
 
@@ -212,9 +223,9 @@ Layer 3: Namespace Isolation (Kubernetes)
 ┌────────────────────────────────────────────────────────────────┐
 │  📊 K8sQuest Statistics                                        │
 ├────────────────────────────────────────────────────────────────┤
-│  Total Levels:              50 (5 worlds of 10)               │
-│  Total XP Available:        11,600                            │
-│  Worlds:                    5                                 │
+│  Total Levels:              60 (6 worlds of 10)               │
+│  Total XP Available:        14,850                            │
+│  Worlds:                    6                                 │
 │  Lines of Code (Engine):    ~1,500                            │
 │  Lines of Documentation:    ~3,000+                           │
 │  Safety Test Coverage:      20 tests, 100% passing            │

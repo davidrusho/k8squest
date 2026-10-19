@@ -1,0 +1,11 @@
+🎯 HINT 2: How a VPA finds its pods
+
+A VPA does not select pods with labels. spec.targetRef points at a
+controller (Deployment, StatefulSet, ...) by apiVersion, kind and name, and
+the VPA takes that controller's pod selector.
+
+If the targetRef cannot be resolved, the VPA cannot match any pods, so the
+recommender has nothing to measure and status.recommendation stays empty.
+
+💡 Compare targetRef.name with `kubectl get deployment -n k8squest`.
+   Keep updateMode: "Off" (recommend only).

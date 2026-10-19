@@ -1,0 +1,11 @@
+🎯 HINT 2: Consent comes from the target
+
+A route may not use a backend in another namespace unless the owner of the
+backend says so. That consent is a ReferenceGrant:
+
+• it lives in the namespace of the thing being referenced (the Service)
+• `from` lists who may reference it: group, kind, and namespace of the referrer
+• `to` lists what may be referenced: group, kind (and optionally a name)
+
+Compare `from.namespace` in the existing grant with the namespace that
+holds shop-route.

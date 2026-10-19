@@ -31,10 +31,10 @@ console = Console()
 
 BASE_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent
 
-# Update these when a new world lands (Worlds 6-8 are in progress)
-EXPECTED_WORLD_ORDERS = [1, 2, 3, 4, 5]
-EXPECTED_LEVELS = 50
-EXPECTED_XP = 11600
+# Update these when a new world lands (Worlds 7-8 are in progress)
+EXPECTED_WORLD_ORDERS = [1, 2, 3, 4, 5, 6]
+EXPECTED_LEVELS = 60
+EXPECTED_XP = 14850
 
 
 def level_dirs():
@@ -261,9 +261,9 @@ def test_discovery():
 
     tests = [
         # (check, description)
-        (check_world_order, "5 worlds discovered, ordered 1-5 by world.yaml"),
-        (check_level_count, "50 levels on disk and discovered"),
-        (check_xp_total, "XP total is 11600, summed from mission.yaml files"),
+        (check_world_order, "6 worlds discovered, ordered 1-6 by world.yaml"),
+        (check_level_count, "60 levels on disk and discovered"),
+        (check_xp_total, "XP total is 14850, summed from mission.yaml files"),
         (check_unique_level_names, "Level names are unique across worlds"),
         (check_mandatory_files, "Every level has the 8 mandatory files"),
         (check_world_yaml_clusters, "Every world has a world.yaml with a valid cluster"),

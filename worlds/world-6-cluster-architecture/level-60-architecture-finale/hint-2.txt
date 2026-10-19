@@ -1,0 +1,12 @@
+🎯 HINT 2: One line each
+
+1️⃣ TLS      - compare the Certificate's issuerRef.name with `kubectl get issuer -n k8squest`.
+2️⃣ Routing  - the route's parentRef also names a listener (sectionName).
+             Compare it with the listeners in `kubectl get gateway web-gw -n k8squest -o yaml`.
+3️⃣ RBAC     - the binding and the ServiceAccount are right. Read the Role's rules:
+             are `resources` real API resource names? (`kubectl api-resources`)
+
+Each fault is a single field.
+
+Note: after you fix the route, status.parents may still list an entry for the old
+sectionName next to the new one. Read the entry whose parentRef matches the route's spec.

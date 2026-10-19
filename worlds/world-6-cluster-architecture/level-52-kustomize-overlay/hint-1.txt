@@ -1,0 +1,14 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ What is actually running?
+   kubectl get deployment shop-web -n k8squest
+   kubectl get deployment shop-web -n k8squest -o yaml | grep -A3 LOG_LEVEL
+
+2️⃣ What does the overlay claim it produces? Render it without applying it:
+   cd "$HOME/.k8squest/work/level-52-kustomize-overlay"
+   kubectl kustomize kustomize/overlays/prod
+
+3️⃣ Compare the rendered output with kustomize/base/deployment.yaml.
+   Did the overlay change anything about replicas or LOG_LEVEL?
+
+🤔 Question: the patch file looks right. What decides which resource it is applied to?

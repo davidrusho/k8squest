@@ -1,0 +1,14 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ What does the pod see?
+   kubectl logs reports-pod -n k8squest --tail=3
+
+2️⃣ Ask the API server what this identity may do:
+   kubectl auth can-i list configmaps \
+     --as=system:serviceaccount:k8squest:reports-sa -n k8squest
+
+3️⃣ Everything the access needs seems to exist:
+   kubectl get sa,role,rolebinding -n k8squest
+
+🤔 Question: the Role allows it and a RoleBinding exists. So what does the
+RoleBinding actually bind the Role TO?

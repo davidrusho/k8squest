@@ -120,17 +120,32 @@ K8sQuest Learning Path
 │     • Volume mounts, permissions, emptyDir vs PVC
 │     • ConfigMap keys and Secret encoding
 │
-└─ WORLD 5: Security & RBAC ⭐⭐⭐
-   │  Difficulty: Advanced | Time: 5-7 hours | XP: 3,300
-   │  Prerequisites: Complete World 4
+├─ WORLD 5: Security & RBAC ⭐⭐⭐
+│  │  Difficulty: Advanced | Time: 5-7 hours | XP: 3,300
+│  │  Prerequisites: Complete World 4
+│  │  
+│  └─ Topics (Levels 41-50):
+│     • RBAC permissions
+│     • SecurityContext and Pod Security Standards
+│     • ResourceQuota and PriorityClass
+│     • NetworkPolicy
+│     • Node affinity, taints and tolerations, PodDisruptionBudgets
+│     • Level 50: a multi-failure chaos finale
+│
+└─ WORLD 6: Cluster Architecture & Extensions ⭐⭐⭐
+   │  Difficulty: Intermediate to Expert | XP: 3,250 | Needs helm on the host
+   │  Prerequisites: Complete World 5
    │  
-   └─ Topics (Levels 41-50):
-      • RBAC permissions
-      • SecurityContext and Pod Security Standards
-      • ResourceQuota and PriorityClass
-      • NetworkPolicy
-      • Node affinity, taints and tolerations, PodDisruptionBudgets
-      • Level 50: a multi-failure chaos finale
+   └─ Topics (Levels 51-60):
+      • Helm release history and rollback
+      • Kustomize overlays and patch targets
+      • CustomResourceDefinition schemas
+      • cert-manager Issuers and Certificates
+      • Gateway API: HTTPRoute, parentRefs, backendRefs, ReferenceGrant
+      • Vertical Pod Autoscaler targetRef
+      • ServiceAccount RoleBindings
+      • RuntimeClass (CRI) and StorageClass (CSI)
+      • Level 60: a three-component finale
 ```
 
 ---
@@ -186,7 +201,7 @@ Week 2: Review missed concepts
   
 Result: Worlds 1-5 cover parts of the CKA and CKAD curricula (see
         Certification Alignment below). They are practice, not full
-        exam preparation. Worlds 6-8 are being added to close the gaps.
+        exam preparation. Worlds 7-8 are being added to close the remaining gaps.
 ```
 
 ---
@@ -276,6 +291,14 @@ Level 1 (CrashLoopBackOff)
 - Manage secrets safely
 - Pass security audits
 
+### After World 6: Cluster Architecture & Extensions
+**You will be able to:**
+- Recover a Helm release from a bad revision
+- Read a Kustomize render and fix an overlay that silently does nothing
+- Diagnose CRD schema rejections, cert-manager issuance and Gateway API route status
+- Trace a 403 to the RoleBinding subject or Role rule that causes it
+- Match RuntimeClass and StorageClass objects to what the cluster actually provides
+
 ---
 
 ## 📊 Time Estimates by Experience Level
@@ -306,16 +329,16 @@ covers today:
 | Domain | Weight | Covered today | Status |
 |--------|--------|---------------|--------|
 | Storage | 10% | Storage classes and dynamic provisioning (levels 31, 35); volume types, access modes and reclaim policies (33, 39, 40); PersistentVolumes and PersistentVolumeClaims (World 4) | Covered |
-| Workloads & Scheduling | 15% | Deployments, rollouts and rollbacks, probes, HPA, ConfigMaps and Secrets (Worlds 1, 2, 4); affinity, taints and tolerations, quotas, PriorityClass, PodDisruptionBudgets (World 5) | Mostly covered; VPA not covered yet |
-| Services & Networking | 20% | Services, endpoints, DNS, Ingress, NetworkPolicy (World 3) | Partly covered; Gateway API is not covered yet |
-| Cluster Architecture, Installation & Configuration | 25% | RBAC (World 5) only | Mostly not covered yet |
-| Troubleshooting | 30% | Pod, Deployment, Service and storage faults on a single-node kind cluster (Worlds 1-5, the Level 50 finale) | Partly covered; node, control-plane and multi-node faults are not covered yet |
+| Workloads & Scheduling | 15% | Deployments, rollouts and rollbacks, probes, HPA, ConfigMaps and Secrets (Worlds 1, 2, 4); affinity, taints and tolerations, quotas, PriorityClass, PodDisruptionBudgets (World 5); Helm and Kustomize deployments, VPA recommendations (World 6, levels 51, 52, 57) | Mostly covered; VPA is covered only as a `targetRef` fault (World 6, Level 57) |
+| Services & Networking | 20% | Services, endpoints, DNS, Ingress, NetworkPolicy (World 3); Gateway API HTTPRoute attachment, backend references and ReferenceGrant (World 6, levels 55, 56) | Partly covered; authoring a GatewayClass or Gateway is not covered |
+| Cluster Architecture, Installation & Configuration | 25% | RBAC (World 5, and ServiceAccount bindings in World 6 level 58); Helm and Kustomize (levels 51, 52); CRDs (53); RuntimeClass and StorageClass as CRI and CSI extension points (59) | Partly covered; kubeadm install and upgrade, etcd backup and restore, HA control planes and CNI are not covered yet |
+| Troubleshooting | 30% | Pod, Deployment, Service and storage faults on a single-node kind cluster (Worlds 1-6, the Level 50 and Level 60 finales) | Partly covered; node, control-plane and multi-node faults are not covered yet |
 
 The two heaviest domains (Troubleshooting 30% and Cluster Architecture 25%)
-are the ones K8sQuest covers least today. Three worlds are being added for them:
+are the ones K8sQuest covers least today. World 6 covers part of Cluster Architecture; two more worlds are being added:
 
-- **World 6: Cluster Architecture** (in progress) - Helm, Kustomize, CRDs and
-  operators, Gateway API, VPA, and the cluster extension interfaces
+- **World 6: Cluster Architecture & Extensions** (shipped) - Helm, Kustomize,
+  CRDs, cert-manager, Gateway API, VPA, RuntimeClass and StorageClass
 - **World 7: Troubleshooting** (in progress) - faults on a multi-node kind cluster
 - **World 8: kubeadm on Lima VMs** (in progress) - building and repairing a
   cluster with kubeadm on virtual machines

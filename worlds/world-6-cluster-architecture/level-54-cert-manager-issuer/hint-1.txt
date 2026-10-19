@@ -1,0 +1,14 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ What does the Certificate say?
+   kubectl get certificate -n k8squest
+   kubectl describe certificate web-cert -n k8squest
+
+2️⃣ cert-manager creates a CertificateRequest for each issuance attempt:
+   kubectl get certificaterequest -n k8squest
+   kubectl describe certificaterequest -n k8squest
+
+3️⃣ Which issuers exist?
+   kubectl get issuer,clusterissuer -A
+
+🤔 Question: does the issuer the Certificate asks for match one that exists?

@@ -1,0 +1,17 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ Look at the pods:
+   kubectl get pods -n k8squest
+   kubectl describe pod <one-of-the-new-pods> -n k8squest
+   What does the Events section say about the image?
+
+2️⃣ Ask Helm, not just Kubernetes:
+   helm list -n k8squest
+   helm history webapp -n k8squest
+
+3️⃣ How many revisions are there, and what does each one say?
+
+🤔 Questions:
+• Which revision was the last good one?
+• What changed between revision 1 and revision 2?
+  (helm get values webapp -n k8squest --all --revision 1, then --revision 2)

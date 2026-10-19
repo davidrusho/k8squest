@@ -1,0 +1,5 @@
+order: 6
+title: "Cluster Architecture & Extensions"
+description: "Helm, Kustomize, CRDs, cert-manager, Gateway API, VPA, ServiceAccount RBAC and the CRI/CSI extension points."
+cluster: kind
+requires: [helm]

@@ -1,0 +1,31 @@
+level: 52
+title: "Kustomize: The Overlay That Did Nothing"
+name: "Kustomize: The Overlay That Did Nothing"
+objective: "Fix the prod overlay in your working copy, then apply it so shop-web runs 3 replicas with LOG_LEVEL=info"
+world: "Cluster Architecture & Extensions"
+difficulty: "intermediate"
+xp: 250
+expected_time: "10-15 minutes"
+concepts:
+  - kustomize
+  - overlays
+  - patches
+  - kubectl-apply-k
+description: |
+  The shop-web app is deployed from a Kustomize base plus a "prod" overlay in
+  kustomize/. The overlay is supposed to run 3 replicas with LOG_LEVEL=info,
+  but production has one replica spamming debug logs. Kustomize built and
+  applied the overlay without a single error.
+
+  Your working copy of the base and overlay is at
+  $HOME/.k8squest/work/level-52-kustomize-overlay/kustomize/ (recreated every
+  time the level starts; the repo copy is not used; K8SQUEST_WORKDIR overrides the
+  base directory).
+
+  Find out why the patch had no effect, fix the overlay, and re-apply it with
+  kubectl apply -k.
+learning_objectives:
+  - Render an overlay with kubectl kustomize before applying it
+  - Understand how a patch target selects resources
+  - Spot that a patch with a non-matching target is skipped without an error
+  - Apply an overlay with kubectl apply -k

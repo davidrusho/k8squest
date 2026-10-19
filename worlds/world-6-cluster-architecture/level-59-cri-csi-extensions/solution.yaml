@@ -1,0 +1,22 @@
+# Both extension objects name something that must exist in the cluster.
+# Their handler / provisioner fields are immutable: delete and recreate them
+#   kubectl delete runtimeclass sandboxed ; kubectl delete storageclass fast-local
+#   kubectl apply -f solution.yaml
+# (kubectl replace --force -f solution.yaml does the same in one step.)
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: sandboxed
+  labels:
+    app.kubernetes.io/part-of: k8squest
+handler: runc            # ✅ the handler this cluster's containerd actually has
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-local
+  labels:
+    app.kubernetes.io/part-of: k8squest
+provisioner: rancher.io/local-path   # ✅ the provisioner kind ships (see: kubectl get sc)
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete

@@ -1,0 +1,25 @@
+level: 54
+title: "cert-manager: The Certificate That Never Gets Ready"
+name: "cert-manager: The Certificate That Never Gets Ready"
+objective: "Make the web-cert Certificate reach Ready=True"
+world: "Cluster Architecture & Extensions"
+difficulty: "intermediate"
+xp: 300
+expected_time: "10-15 minutes"
+concepts:
+  - cert-manager
+  - issuer
+  - clusterissuer
+  - certificate
+description: |
+  cert-manager is installed in the cluster. A self-signed Issuer named
+  selfsigned-issuer exists in the k8squest namespace, and a Certificate named
+  web-cert asks for a TLS certificate from it. The TLS Secret never appears
+  and the Certificate stays not Ready.
+
+  Find out what cert-manager is complaining about and fix the Certificate.
+learning_objectives:
+  - Follow Certificate -> CertificateRequest -> Issuer when a certificate is not issued
+  - Tell Issuer (namespaced) from ClusterIssuer (cluster-wide)
+  - Read the Ready condition and events with kubectl describe
+  - Understand issuerRef kind and name

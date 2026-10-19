@@ -6,6 +6,26 @@ As required by section 4(b) of that license, this file states that the files
 listed below have been changed from the upstream versions. Files not listed
 are unchanged from upstream.
 
+## World 6: Cluster Architecture & Extensions
+
+### Added
+
+- `worlds/world-6-cluster-architecture/` - World 6 (`order: 6`, `cluster: kind`, `requires: [helm]`), levels 51-60, 3,250 XP: Helm failed upgrade (51), Kustomize overlay patch target (52), CRD schema (53), cert-manager Issuer/Certificate (54), Gateway API HTTPRoute parentRef and backendRef (55), ReferenceGrant (56), VPA targetRef (57), ServiceAccount RoleBinding subject (58), RuntimeClass and StorageClass extension points (59), and a three-component finale (60).
+- `worlds/world-6-cluster-architecture/_shared/lib.sh` - idempotent installers for cert-manager v1.21.2, Gateway API v1.6.3 (standard channel), Envoy Gateway v1.9.2, metrics-server v0.9.0 (with `--kubelet-insecure-tls` for kind) and the VPA 1.8.0 recommender, used by the `setup.sh` scripts of levels 54-57, 60. All versions are pinned in this one file.
+- Level 51 (`chart/`) and level 52 (`kustomize/`) carry their own Helm chart and Kustomize base and overlay.
+
+- `tests/test_level_reset.py` - stub-kubectl tests for `engine/level_reset.py`.
+- `engine/level_reset.py` - shared reset used by the engine, `engine/reset.py` and `tests/level_harness.py`: after `kubectl delete all` it clears quotas, limit ranges, network policies, roles, role bindings, service accounts, config maps, secrets, PVCs and the level-set node taint and label.
+
+### Modified
+
+- `engine/engine.py` - calls `clear_leftovers` after `kubectl delete all`.
+- `engine/reset.py` - redeploys through the same path as the engine (runs `setup.sh` when a level has one, otherwise applies `broken.yaml`) instead of applying `broken.yaml` with `-n`.
+- `tests/level_harness.py` - uses `clear_leftovers`; `--isolate` now only deletes the namespace.
+- `tests/test_discovery.py` - expects 6 worlds, 60 levels and 14,850 XP.
+- `README.md`, `docs/ARCHITECTURE.md`, `docs/LEARNING-PATH.md`, `docs/contributing.md` - World 6 added; level, world and XP totals updated; the CKA coverage table now lists what World 6 covers; `helm` listed as a requirement for World 6.
+- `worlds/world-5-security/level-50-chaos-finale/debrief.md` - "What's Next" now points to World 6 as available.
+
 ## Data-driven worlds and refreshed Kubernetes version
 
 ### Added

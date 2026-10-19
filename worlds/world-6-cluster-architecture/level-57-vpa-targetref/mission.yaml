@@ -1,0 +1,27 @@
+level: 57
+title: "VPA: The Autoscaler Watching Nothing"
+name: "VPA: The Autoscaler Watching Nothing"
+objective: "Point hamster-vpa at the hamster Deployment so it publishes a resource recommendation"
+world: "Cluster Architecture & Extensions"
+difficulty: "advanced"
+xp: 350
+expected_time: "15-20 minutes"
+concepts:
+  - vertical-pod-autoscaler
+  - targetref
+  - resource-requests
+  - metrics-server
+description: |
+  The hamster Deployment runs two CPU-hungry pods with guessed resource
+  requests. A VerticalPodAutoscaler named hamster-vpa was created to recommend
+  better requests (in recommendation-only mode), but minutes later its status
+  is still empty: no recommendation, ever.
+
+  Find out why the VPA is not producing recommendations and fix it. After the
+  fix the recommender needs about a minute or two of metrics before it
+  publishes numbers.
+learning_objectives:
+  - Know what a VerticalPodAutoscaler recommends and how updateMode changes what it does
+  - Read VPA status conditions to find a bad targetRef
+  - Fix targetRef (apiVersion, kind, name) so the VPA finds its pods
+  - Understand that VPA needs metrics-server and gives recommendations for requests, not replicas

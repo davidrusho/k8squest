@@ -1,0 +1,15 @@
+🎯 HINT 2: A RoleBinding names its subjects exactly
+
+A RoleBinding connects a roleRef (the permissions) to subjects (the identities).
+A ServiceAccount subject is identified by BOTH name and namespace:
+
+   subjects:
+   - kind: ServiceAccount
+     name: reports-sa
+     namespace: <the namespace where the ServiceAccount lives>
+
+system:serviceaccount:default:reports-sa and
+system:serviceaccount:k8squest:reports-sa are two different identities.
+
+💡 Read the binding:
+   kubectl get rolebinding reports-binding -n k8squest -o yaml

@@ -1,0 +1,13 @@
+# Production overlay: 3 replicas and quieter logging on top of the shared base.
+resources:
+- ../../base
+namespace: k8squest
+labels:
+- pairs:
+    env: prod
+  includeSelectors: false
+patches:
+- path: replicas-and-logging.yaml
+  target:
+    kind: Deployment
+    name: shop-web-prod   # ❌ no Deployment has this name, so the patch is silently skipped

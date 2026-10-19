@@ -1,0 +1,15 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ Try to create the resource and read the whole error:
+   kubectl apply -f "$HOME/.k8squest/work/level-53-crd-schema/website.yaml"
+   Which field does it name, and what type does it say it expected?
+
+2️⃣ Look at what the CRD declares:
+   kubectl get crd websites.k8squest.io
+   kubectl explain website.spec
+   kubectl explain website.spec.replicas
+
+3️⃣ Compare the field in website.yaml with the type in the schema.
+
+🤔 Question: which one is wrong, the resource or the schema?
+(A replica count of 3 in website.yaml looks perfectly reasonable.)

@@ -1,0 +1,14 @@
+✅ HINT 3: Complete Solution
+
+   kubectl delete runtimeclass sandboxed
+   kubectl delete storageclass fast-local
+   kubectl apply -f solution.yaml
+
+   # handler: runc
+   # provisioner: rancher.io/local-path
+
+(or: kubectl replace --force -f solution.yaml)
+
+The Pending PVC binds once its class has a working provisioner; the pod
+retries its sandbox with the new handler a few seconds later.
+   kubectl get pod,pvc -n k8squest

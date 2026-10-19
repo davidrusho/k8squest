@@ -1,0 +1,28 @@
+level: 59
+title: "CRI and CSI: Extensions That Point at Nothing"
+name: "CRI and CSI: Extensions That Point at Nothing"
+objective: "Get the ledger pod Running with its PVC Bound by fixing the RuntimeClass and StorageClass"
+world: "Cluster Architecture & Extensions"
+difficulty: "advanced"
+xp: 350
+expected_time: "15-25 minutes"
+concepts:
+  - runtimeclass
+  - cri
+  - storageclass
+  - csi
+description: |
+  The ledger Deployment runs in a "sandboxed" RuntimeClass and keeps its data
+  on a PersistentVolumeClaim from the "fast-local" StorageClass. Both were
+  copied from a production cluster that has extra components installed.
+  Here, the pod never starts.
+
+  Kubernetes delegates container runtimes (CRI), storage (CSI) and networking
+  (CNI) to pluggable components. Find what each extension object points at,
+  compare it with what this cluster really provides, and fix both. Expect two
+  separate symptoms, one after the other.
+learning_objectives:
+  - Know that RuntimeClass.handler must match a handler configured in the node's CRI runtime
+  - Know that StorageClass.provisioner must name a driver that is actually installed
+  - Read PVC and pod events to tell a storage failure from a runtime failure
+  - Find what a cluster provides (kubectl get storageclass, runtimeclass)

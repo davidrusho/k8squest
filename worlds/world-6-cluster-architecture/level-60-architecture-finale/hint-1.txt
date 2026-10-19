@@ -1,0 +1,13 @@
+🔍 HINT 1: Triage
+
+Three symptoms, three components. Look at each one's own status:
+
+1️⃣ TLS:      kubectl get certificate,certificaterequest,issuer -n k8squest
+             kubectl describe certificate platform-cert -n k8squest
+2️⃣ Routing:  kubectl get httproute,gateway -n k8squest
+             kubectl describe httproute api-route -n k8squest
+3️⃣ RBAC:     kubectl logs probe -n k8squest --tail=3
+             kubectl auth can-i list configmaps \
+               --as=system:serviceaccount:k8squest:probe-sa -n k8squest
+
+🤔 Do the faults depend on each other? (No: fix them in any order.)

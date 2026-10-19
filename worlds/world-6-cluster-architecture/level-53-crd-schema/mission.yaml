@@ -1,0 +1,28 @@
+level: 53
+title: "CRD: The Schema That Rejects Everything"
+name: "CRD: The Schema That Rejects Everything"
+objective: "Make the Website custom resource in your working copy of website.yaml validate and apply"
+world: "Cluster Architecture & Extensions"
+difficulty: "intermediate"
+xp: 300
+expected_time: "10-15 minutes"
+concepts:
+  - customresourcedefinition
+  - openapi-schema
+  - validation
+  - custom-resources
+description: |
+  The platform team installed a Website CustomResourceDefinition (group
+  k8squest.io). Developers are told to create a Website from website.yaml, but the API server
+  rejects it with a validation error. Your working copy of website.yaml (and of
+  the CRD, crd.yaml) is in $HOME/.k8squest/work/level-53-crd-schema/ and is
+  recreated every time the level starts (K8SQUEST_WORKDIR overrides the base
+  directory).
+
+  Read the error, work out whether the resource or the schema is wrong, fix
+  it, and get the Website created.
+learning_objectives:
+  - Read an OpenAPI v3 validation failure from a custom resource
+  - Inspect a CRD's schema with kubectl get crd and kubectl explain
+  - Fix a CRD schema (type, minimum, maximum, enum, required)
+  - Know that the CRD, not the controller, is what validates a custom resource

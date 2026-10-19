@@ -1,0 +1,14 @@
+🎯 HINT 2: The schema is the contract
+
+A CustomResourceDefinition carries an OpenAPI v3 schema per version:
+
+   spec.versions[].schema.openAPIV3Schema
+
+The API server validates every custom resource against it: types,
+required fields, enum values, minimum/maximum, patterns.
+
+Dump the schema (or edit your copy: $HOME/.k8squest/work/level-53-crd-schema/crd.yaml):
+   kubectl get crd websites.k8squest.io -o yaml
+
+💡 `replicas` is a count. Which OpenAPI type should that be? You can also
+   add `minimum: 1` and `maximum: 10` while you are there.

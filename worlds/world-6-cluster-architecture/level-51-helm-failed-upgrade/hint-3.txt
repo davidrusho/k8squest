@@ -1,0 +1,16 @@
+✅ HINT 3: Complete Solution
+
+Roll back to revision 1:
+
+   helm rollback webapp 1 -n k8squest
+   kubectl rollout status deployment/webapp -n k8squest
+
+Or upgrade again with the typo fixed (the replica count is up to you: a
+rollback returns to 2, the broken upgrade asked for 3):
+
+   cd "$HOME/.k8squest/work/level-51-helm-failed-upgrade"
+   helm upgrade webapp ./chart -n k8squest --reset-values \
+     --set image.tag=1.27-alpine
+
+Either way, run `helm history webapp -n k8squest` afterwards: a rollback
+adds a new revision rather than deleting the bad one.

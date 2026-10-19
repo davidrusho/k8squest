@@ -1,0 +1,62 @@
+# CRI extension point: a RuntimeClass maps a name to a handler in the node's container runtime.
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: sandboxed
+  labels:
+    app.kubernetes.io/part-of: k8squest
+handler: runsc          # ❌ no "runsc" handler is configured in this cluster's container runtime
+---
+# CSI/storage extension point: a StorageClass names the provisioner that creates volumes.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-local
+  labels:
+    app.kubernetes.io/part-of: k8squest
+provisioner: csi.fastdisk.example.com   # ❌ no such driver is installed in this cluster
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ledger-data
+  namespace: k8squest
+spec:
+  storageClassName: fast-local
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledger
+  namespace: k8squest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ledger
+  template:
+    metadata:
+      labels:
+        app: ledger
+    spec:
+      runtimeClassName: sandboxed
+      containers:
+      - name: ledger
+        image: nginx:1.27-alpine
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: ledger-data

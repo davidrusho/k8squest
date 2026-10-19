@@ -1,0 +1,14 @@
+🎯 HINT 2: Two references, two conditions
+
+An HTTPRoute has two kinds of references, and each has its own condition:
+
+• spec.parentRefs   -> which Gateway to attach to        -> condition Accepted
+• spec.rules[].backendRefs -> where to send traffic      -> condition ResolvedRefs
+
+If parentRefs matches no Gateway, no controller owns the route, so
+status.parents is simply empty: there is no condition to read yet.
+Once the route is attached, ResolvedRefs=False (Envoy Gateway reports PortNotFound
+for a port the Service does not have; the Gateway API's own reason for a missing
+backend is BackendNotFound) tells you the backend could not be resolved.
+
+💡 Fix both references. The Gateway is web-gw; the Service echo listens on port 80.

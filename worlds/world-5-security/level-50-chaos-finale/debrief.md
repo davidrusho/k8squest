@@ -81,10 +81,10 @@ You simultaneously fixed:
 
 ### Continue Your Journey
 
-1. **World 6: Cluster Architecture** (in progress) - Helm, Kustomize, CRDs and operators, Gateway API, VPA
+1. **World 6: Cluster Architecture & Extensions** (Levels 51-60) - Helm, Kustomize, CRDs, cert-manager, Gateway API, VPA, RuntimeClass and StorageClass
 2. **World 7: Troubleshooting on multi-node clusters** (in progress) - the exam's heaviest domain
 3. **World 8: kubeadm on Lima VMs** (in progress) - build and repair a real cluster
-4. **Certifications** - the CKA, CKAD and CKS exams test more than Worlds 1-5 cover; see `docs/LEARNING-PATH.md` for the domain-by-domain mapping
+4. **Certifications** - the CKA, CKAD and CKS exams test more than Worlds 1-6 cover; see `docs/LEARNING-PATH.md` for the domain-by-domain mapping
 
 ### Build Real Projects
 

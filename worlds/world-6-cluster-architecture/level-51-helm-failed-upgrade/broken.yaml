@@ -1,0 +1,7 @@
+# Helm values file for the second revision of the "webapp" release.
+# setup.sh installs revision 1 from chart/ with its default values, then runs
+#   helm upgrade webapp ./chart -f broken.yaml
+# to produce the broken revision 2.
+replicaCount: 3
+image:
+  tag: 1.27-alpin   # ❌ typo: this tag does not exist, so the new pods can never pull their image

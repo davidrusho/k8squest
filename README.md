@@ -8,7 +8,7 @@ Learn Kubernetes by fixing it.
 
 K8sQuest is a **local, game-based Kubernetes training platform** with an interactive GUI-like terminal interface. Each mission breaks something in Kubernetes. Your job is to fix it.
 
-**50 progressive challenges across 5 worlds** - from beginner to advanced. Worlds 6-8 (Cluster Architecture, Troubleshooting on multi-node clusters, and kubeadm on Lima VMs) are in progress.
+**60 progressive challenges across 6 worlds** - from beginner to advanced. Worlds 7-8 (Troubleshooting on multi-node clusters, and kubeadm on Lima VMs) are in progress.
 
 No cloud. No AWS. No costs.
 
@@ -42,6 +42,7 @@ K8sQuest includes **comprehensive safety guards** (enabled by default):
 - bash
 - python3 (3.9+)
 - jq
+- helm 3.13 or newer (only for World 6, Cluster Architecture & Extensions; Helm 4 works too). World 6 needs internet access at setup time: its levels download and install cert-manager, Gateway API, Envoy Gateway, metrics-server and the VPA recommender into the kind cluster
 
 ## Platform Support
 
@@ -225,6 +226,7 @@ python3 engine/reset.py level-15-rollout            # World 2
 python3 engine/reset.py level-28-endpoints          # World 3
 python3 engine/reset.py level-38-volume-permissions # World 4
 python3 engine/reset.py level-45-node-affinity      # World 5
+python3 engine/reset.py level-55-httproute-parentref # World 6
 ```
 
 Or reset everything:
@@ -283,9 +285,22 @@ Production-ready Kubernetes: RBAC, security, resource management, and chaos engi
 - ✅ Taints/Tolerations, PodDisruptionBudgets, PriorityClass
 - ✅ **Level 50**: 🔥 **The Chaos Finale** - 9 simultaneous failures in a production scenario!
 
-**Today**: 5 worlds, 50 levels, 11,600 XP in total (summed from the `mission.yaml` files) | Beginner → Advanced
+### 🏆 World 6: Cluster Architecture & Extensions (Levels 51-60) 
+**Difficulty**: Intermediate → Expert | **Total XP**: 3,250  
+Cluster extensions and the packaging, routing and certificate tooling around them. Needs `helm` on the host.
 
-**In progress**: World 6 (Cluster Architecture), World 7 (Troubleshooting on multi-node kind), World 8 (kubeadm on Lima VMs). New worlds are discovered from `worlds/<world>/world.yaml`, so the game picks them up as they land.
+- ✅ Helm releases: revision history and rollback
+- ✅ Kustomize bases and overlays, patch targets
+- ✅ CustomResourceDefinitions and their OpenAPI schemas
+- ✅ cert-manager Issuers and Certificates
+- ✅ Gateway API: HTTPRoute, parentRefs, backendRefs, ReferenceGrant (Envoy Gateway)
+- ✅ Vertical Pod Autoscaler targetRef
+- ✅ ServiceAccount RoleBindings, and the RuntimeClass (CRI) and StorageClass (CSI) extension points
+- ✅ **Level 60**: three independent faults across cert-manager, Gateway API and RBAC
+
+**Today**: 6 worlds, 60 levels, 14,850 XP in total (summed from the `mission.yaml` files) | Beginner → Expert
+
+**In progress**: World 7 (Troubleshooting on multi-node kind), World 8 (kubeadm on Lima VMs). New worlds are discovered from `worlds/<world>/world.yaml`, so the game picks them up as they land.
 
 📖 **Full Blueprint**: See [docs/50-CHALLENGE-BLUEPRINT.md](docs/50-CHALLENGE-BLUEPRINT.md) for detailed descriptions of all 50 challenges.
 

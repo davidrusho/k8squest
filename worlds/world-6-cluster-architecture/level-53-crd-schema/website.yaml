@@ -1,0 +1,11 @@
+# The custom resource the platform team wants to create.
+# Apply it with: kubectl apply -f website.yaml
+apiVersion: k8squest.io/v1
+kind: Website
+metadata:
+  name: shop
+  namespace: k8squest
+spec:
+  domain: shop.example.com
+  replicas: 3
+  tier: pro

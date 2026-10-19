@@ -1,0 +1,28 @@
+level: 51
+title: "Helm: The Failed Upgrade"
+name: "Helm: The Failed Upgrade"
+objective: "Recover the webapp Helm release so every pod is running the good image"
+world: "Cluster Architecture & Extensions"
+difficulty: "intermediate"
+xp: 250
+expected_time: "10-15 minutes"
+concepts:
+  - helm
+  - release-history
+  - rollback
+  - values
+description: |
+  Someone upgraded the "webapp" Helm release in the k8squest namespace to scale
+  it up to 3 replicas. Helm reported the upgrade as done, but the new pods are
+  stuck and the rollout never completes.
+
+  The chart (and the values file used for the broken upgrade) is copied for you to
+  $HOME/.k8squest/work/level-51-helm-failed-upgrade/ every time the level starts.
+  Work from there (the K8SQUEST_WORKDIR environment variable overrides the base
+  directory); the repo copy is not used. Find out which revision broke the
+  release and put the release back into a healthy state using Helm.
+learning_objectives:
+  - Read a release's revision history with helm history
+  - Compare what changed between revisions with helm get values --revision
+  - Recover with helm rollback or a corrected helm upgrade
+  - Understand why the release, not only the Deployment, has to be fixed

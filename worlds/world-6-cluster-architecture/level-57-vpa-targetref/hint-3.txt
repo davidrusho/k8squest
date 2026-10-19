@@ -1,0 +1,13 @@
+✅ HINT 3: Complete Solution
+
+   spec:
+     targetRef:
+       apiVersion: apps/v1
+       kind: Deployment
+       name: hamster      # was hamster-app
+
+   kubectl apply -f solution.yaml
+   kubectl describe vpa hamster-vpa -n k8squest
+
+The recommender needs a minute or two of metrics before it writes
+status.recommendation. Re-run validation after that.

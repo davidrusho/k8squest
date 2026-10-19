@@ -1,0 +1,11 @@
+✅ HINT 3: Complete Solution
+
+1️⃣ Certificate:  issuerRef.name: platform-issuer         (was platform-issuer-ca)
+2️⃣ HTTPRoute:    parentRefs[0].sectionName: http         (was https)
+3️⃣ Role:         resources: ["configmaps"]               (was "configmap")
+
+   kubectl apply -f solution.yaml
+
+   kubectl get certificate platform-cert -n k8squest
+   kubectl get httproute api-route -n k8squest -o jsonpath='{.status.parents[0].conditions}'
+   kubectl logs probe -n k8squest --tail=2

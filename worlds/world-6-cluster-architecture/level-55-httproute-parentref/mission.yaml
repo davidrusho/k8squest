@@ -1,0 +1,28 @@
+level: 55
+title: "Gateway API: The Route Nobody Accepts"
+name: "Gateway API: The Route Nobody Accepts"
+objective: "Make the echo-route HTTPRoute Accepted and with its backend references resolved"
+world: "Cluster Architecture & Extensions"
+difficulty: "advanced"
+xp: 300
+expected_time: "15-20 minutes"
+concepts:
+  - gateway-api
+  - httproute
+  - parentrefs
+  - backendrefs
+description: |
+  The cluster runs Envoy Gateway with a Gateway called web-gw in the k8squest
+  namespace. A developer created an HTTPRoute named echo-route to send traffic
+  to the echo Service, but the route is not attached to the Gateway and
+  nothing is routed.
+
+  Read the route's status conditions, find every reason it is not accepted or
+  its references are unresolved, and fix the HTTPRoute.
+  (kind has no LoadBalancer, so the Gateway itself will never get an address:
+  that is expected. Judge the route by its conditions.)
+learning_objectives:
+  - Read HTTPRoute status conditions (Accepted, ResolvedRefs) per parent
+  - Understand parentRefs and which Gateway a route attaches to
+  - Understand backendRefs and that the port must match the Service port
+  - Use kubectl describe httproute / get gateway to trace a routing failure

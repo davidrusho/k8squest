@@ -1,0 +1,13 @@
+✅ HINT 3: Complete Solution
+
+Edit the CRD schema so replicas is an integer:
+
+   replicas:
+     type: integer
+     minimum: 1
+     maximum: 10
+
+   # edit crd.yaml in $HOME/.k8squest/work/level-53-crd-schema/, or use solution.yaml
+   kubectl apply -f solution.yaml        # the corrected CRD
+   kubectl apply -f "$HOME/.k8squest/work/level-53-crd-schema/website.yaml"         # now accepted
+   kubectl get websites -n k8squest

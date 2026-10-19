@@ -1,0 +1,46 @@
+# This is the output of: kubectl kustomize kustomize/overlays/prod
+# The prod overlay's patch never matched, so replicas and LOG_LEVEL come out as the base values.
+# ❌ replicas: 1 and LOG_LEVEL=debug in a production overlay
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    env: prod
+  name: shop-web
+  namespace: k8squest
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: shop-web
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    env: prod
+  name: shop-web
+  namespace: k8squest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shop-web
+  template:
+    metadata:
+      labels:
+        app: shop-web
+    spec:
+      containers:
+      - env:
+        - name: LOG_LEVEL
+          value: debug
+        image: nginx:1.27-alpine
+        name: web
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi

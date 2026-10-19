@@ -28,6 +28,9 @@ from pathlib import Path
 from rich.console import Console
 from rich.prompt import Confirm
 
+sys.path.insert(0, str(Path(__file__).parent))
+from level_reset import deploy_level
+
 console = Console()
 
 def reset_level_any_world(level):
@@ -50,33 +53,25 @@ def reset_level_any_world(level):
     if not found:
         console.print(f"[red]Error: Level not found in any world: {level}[/red]")
         return False
-    broken_file = level_path / "broken.yaml"
-    if not broken_file.exists():
-        console.print(f"[red]Error: No broken.yaml found in {level}[/red]")
+    if not (level_path / "broken.yaml").exists() and not (level_path / "setup.sh").exists():
+        console.print(f"[red]Error: No broken.yaml or setup.sh found in {level}[/red]")
         return False
     console.print(f"[yellow]Resetting {world_dir.name}/{level}...[/yellow]\n")
     # Delete namespace (clean slate)
     console.print("Deleting namespace...")
-    result_del = run_kubectl_with_timeout(["kubectl", "delete", "namespace", "k8squest", "--ignore-not-found"])
+    result_del = run_kubectl_with_timeout(["kubectl", "delete", "namespace", "k8squest", "--ignore-not-found"], timeout=180)
     if result_del is None:
         return False
-    # Recreate namespace
-    console.print(" Creating fresh namespace...")
-    result_create = run_kubectl_with_timeout(["kubectl", "create", "namespace", "k8squest"])
-    if result_create is None:
-        return False
-    # Apply broken state
+    # Redeploy exactly as the engine does: namespace, delete all, leftovers,
+    # then setup.sh if the level has one, otherwise broken.yaml
     console.print("Deploying broken resources...")
-    result = run_kubectl_with_timeout(["kubectl", "apply", "-n", "k8squest", "-f", str(broken_file)])
-    if result is None:
-        return False
-    if result.returncode == 0:
+    ok, message = deploy_level(level_path)
+    if ok:
         console.print("\n[green]✅ Level reset successfully![/green]")
         console.print(f"[dim]You can now retry: {level}[/dim]\n")
         return True
-    else:
-        console.print(f"\n[red]❌ Reset failed: {result.stderr}[/red]\n")
-        return False
+    console.print(f"\n[red]❌ Reset failed: {message}[/red]\n")
+    return False
 
 def reset_all():
     """Reset entire game state"""

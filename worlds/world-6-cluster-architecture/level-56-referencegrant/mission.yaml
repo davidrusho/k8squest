@@ -1,0 +1,26 @@
+level: 56
+title: "ReferenceGrant: Crossing the Namespace Line"
+name: "ReferenceGrant: Crossing the Namespace Line"
+objective: "Let shop-route reach the catalog Service in k8squest-backend with a correct ReferenceGrant"
+world: "Cluster Architecture & Extensions"
+difficulty: "advanced"
+xp: 350
+expected_time: "15-20 minutes"
+concepts:
+  - gateway-api
+  - referencegrant
+  - cross-namespace
+  - httproute
+description: |
+  The shop-route HTTPRoute lives in the k8squest namespace, attached to the
+  Gateway web-gw, but its backend is the catalog Service in a different
+  namespace, k8squest-backend. The team that owns k8squest-backend wrote a
+  ReferenceGrant, yet the route still refuses to use the backend.
+
+  Find out why the grant does not apply and fix it. Keep the Service where it
+  is: the backend team does not want to move it.
+learning_objectives:
+  - Understand why Gateway API needs explicit consent for cross-namespace references
+  - Read the RefNotPermitted reason on an HTTPRoute's ResolvedRefs condition
+  - Write a ReferenceGrant (from / to) in the namespace of the target
+  - Know which side of the reference owns the ReferenceGrant

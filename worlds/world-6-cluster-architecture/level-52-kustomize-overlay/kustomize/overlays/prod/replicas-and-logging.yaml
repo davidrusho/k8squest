@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-web
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: web
+        env:
+        - name: LOG_LEVEL
+          value: info

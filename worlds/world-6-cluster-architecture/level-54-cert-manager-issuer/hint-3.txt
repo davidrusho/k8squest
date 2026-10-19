@@ -1,0 +1,12 @@
+✅ HINT 3: Complete Solution
+
+The only issuer is the namespaced Issuer selfsigned-issuer. Point the
+Certificate at it:
+
+   issuerRef:
+     name: selfsigned-issuer
+     kind: Issuer
+
+   kubectl apply -f solution.yaml
+   kubectl get certificate web-cert -n k8squest -w
+   kubectl get secret web-cert-tls -n k8squest
