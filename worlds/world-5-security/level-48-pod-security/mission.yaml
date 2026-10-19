@@ -14,15 +14,18 @@ concepts:
 description: |
   Your namespace enforces the "restricted" Pod Security Standard!
   
-  Pods must meet strict security requirements, but your pod violates
-  the restricted policy by running as root with privilege escalation enabled.
+  Pods must meet strict security requirements, but the Pod template of the
+  secure-app Deployment violates the restricted policy by running as root
+  with privilege escalation enabled.
   
-  Error: "pods must not set runAsUser to 0"
+  The Deployment exists but has no Pods. Its ReplicaSet reports a FailedCreate
+  event: 'violates PodSecurity "restricted:latest": ...'
+  (see `kubectl describe rs -n k8squest` or `kubectl get events -n k8squest`).
   
-  Your mission: Update pod to meet restricted security standards.
+  Your mission: Update the Pod template to meet restricted security standards.
 
 learning_objectives:
   - Understand Pod Security Standards (privileged, baseline, restricted)
   - Configure pods to meet restricted requirements
   - Apply security best practices
-  - Debug pod security admission failures
+  - Debug pod security admission failures (ReplicaSet FailedCreate events)

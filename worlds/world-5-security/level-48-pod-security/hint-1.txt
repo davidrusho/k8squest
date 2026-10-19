@@ -2,11 +2,15 @@
 
 ## HINT 1: The Problem
 ```bash
-kubectl apply -f broken.yaml
-# Error: pods restricted: allowPrivilegeEscalation != false
+kubectl get deployment,rs,pods -n k8squest   # Deployment 0/1, no Pods
+kubectl describe rs -n k8squest              # look at Events
+# Warning FailedCreate ... pods "secure-app-..." is forbidden:
+#   violates PodSecurity "restricted:latest": allowPrivilegeEscalation != false ...
 ```
 
-Namespace enforces "restricted" standard. Your pod violates it.
+Namespace enforces "restricted" standard. Your Deployment's Pod template violates it.
+Enforce mode checks Pods, not the Deployment, so the Deployment was accepted and the
+rejection shows up on the ReplicaSet.
 
 ## HINT 2: Restricted Requirements
 
@@ -20,6 +24,7 @@ All of these MUST be set:
 ## HINT 3: Solution
 
 ```yaml
+# Deployment spec.template.spec
 spec:
   securityContext:
     runAsNonRoot: true
@@ -36,4 +41,4 @@ spec:
         drop: [ALL]
 ```
 
-Apply and run `./validate.sh`
+Put these in the Deployment's `spec.template.spec`, apply, and run `./validate.sh`

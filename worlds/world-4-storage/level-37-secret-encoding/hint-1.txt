@@ -7,7 +7,9 @@ Let's investigate why this is a security issue:
 1️⃣ Check pod status:
    kubectl get pod database-client -n k8squest
    
-   The pod should be Running (the Secret is valid!)
+   The pod keeps restarting (CrashLoopBackOff), so something in the Secret is wrong.
+   Read why: kubectl logs database-client -n k8squest
+   It reports an invalid username format.
 
 2️⃣ Check the Secret:
    kubectl get secret db-credentials -n k8squest -o yaml
@@ -17,7 +19,7 @@ Let's investigate why this is a security issue:
 3️⃣ Decode the username:
    kubectl get secret db-credentials -n k8squest -o jsonpath='{.data.username}' | base64 -d
    
-   Output: admin
+   Output: YWRtaW4=   <- still base64, not the username! It was encoded twice.
 
 4️⃣ Decode the password:
    kubectl get secret db-credentials -n k8squest -o jsonpath='{.data.password}' | base64 -d

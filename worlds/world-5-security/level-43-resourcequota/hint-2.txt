@@ -108,7 +108,7 @@ memory: "512M"   # 512 Megabytes (1000^2 bytes)
 
 1. **Pod creation:** Kubernetes checks if adding this pod exceeds quota
 2. **If within quota:** Pod created, quota usage updated
-3. **If exceeds quota:** Pod rejected with error
+3. **If exceeds quota:** the API server rejects the request with `403 Forbidden`. For a Deployment, the Deployment itself is accepted, and the ReplicaSet's attempt to create the Pod is what gets rejected (a `FailedCreate` event)
 
 ## Checking Quota Status
 
@@ -136,7 +136,7 @@ requests.memory  1Gi     2Gi      ← OK: 1 < 2
 
 ## The Fix
 
-Reduce the pod's CPU request:
+Reduce the CPU request in the Deployment's Pod template:
 
 ```yaml
 resources:

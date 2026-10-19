@@ -8,7 +8,7 @@ type: Opaque
 data:
   # ⚠️ These look encoded, but base64 is NOT encryption!
   # Anyone with kubectl access can decode these instantly
-  username: YWRtaW4=  # base64 encoded "admin"
+  username: WVdSdGFXND0=  # ❌ base64 encoded TWICE: decodes to "YWRtaW4=", not "admin"
   password: c2VjcmV0cGFzczEyMw==  # base64 encoded "secretpass123"
 ---
 apiVersion: v1

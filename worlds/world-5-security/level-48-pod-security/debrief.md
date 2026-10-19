@@ -41,6 +41,20 @@ metadata:
 - **audit**: Logs violations
 - **warn**: Warns users
 
+### Where you see the rejection
+
+Enforce mode is applied to Pods, not to workload objects such as a Deployment. So the
+Deployment is accepted (audit and warn modes do check it, so `kubectl apply` printed a
+warning), and the ReplicaSet's attempt to create each Pod is rejected. The failure appears as a
+`FailedCreate` event on the ReplicaSet, not at apply time:
+
+```bash
+kubectl describe rs -n k8squest
+kubectl get events -n k8squest
+```
+
+A bare Pod applied directly would be rejected immediately by `kubectl apply`.
+
 ---
 
 ## Key Takeaways

@@ -2,18 +2,10 @@
 
 ## The Complete Fix
 
-Reduce the pod's resource requests to fit within the namespace quota:
+Reduce the resource requests in the Deployment's Pod template to fit within the namespace quota:
 
 ```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: resource-hungry-app
-  namespace: k8squest
-spec:
-  containers:
-  - name: app
-    image: nginx:latest
+# in the Deployment: spec.template.spec.containers[0]
     resources:
       requests:
         cpu: "500m"  # ✅ Reduced from 2500m to 500m
@@ -59,10 +51,10 @@ This allows:
 # Apply the corrected configuration
 kubectl apply -f solution.yaml
 
-# Watch pod status
-kubectl get pod resource-hungry-app -n k8squest --watch
+# Watch the Deployment roll out a new ReplicaSet
+kubectl get deployment,rs,pods -n k8squest --watch
 
-# Should transition: Pending → Running
+# Should transition: 0/1 ready, no Pods → 1/1 Running
 
 # Verify quota usage
 kubectl describe resourcequota compute-quota -n k8squest
@@ -94,7 +86,7 @@ requests:
 
 ```bash
 # Check what pod actually uses
-kubectl top pod resource-hungry-app -n k8squest
+kubectl top pods -n k8squest
 ```
 
 ### 3. Set Limits Higher Than Requests
@@ -167,17 +159,17 @@ requests:
 ## Verification Commands
 
 ```bash
-# Check pod is running
-kubectl get pod resource-hungry-app -n k8squest
+# Check the Deployment and its Pod are running
+kubectl get deployment,pods -n k8squest
 
 # Check resource requests
-kubectl describe pod resource-hungry-app -n k8squest | grep -A 6 "Requests"
+kubectl describe pods -n k8squest | grep -A 6 "Requests"
 
 # Check quota usage
 kubectl describe resourcequota compute-quota -n k8squest
 
 # Check actual usage (requires metrics-server)
-kubectl top pod resource-hungry-app -n k8squest
+kubectl top pods -n k8squest
 ```
 
 ---

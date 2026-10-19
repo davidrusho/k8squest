@@ -13,13 +13,13 @@ spec:
   hard:
     requests.cpu: "2"
 
-# Pod requests 2.5 CPUs
+# The Deployment's Pod template requests 2.5 CPUs
 resources:
   requests:
     cpu: "2500m"  # 2.5 CPUs > 2 quota = REJECTED!
 ```
 
-**Result:** Pod stuck in Pending, "exceeded quota" error
+**Result:** The Deployment existed but had no Pods. Its ReplicaSet logged `FailedCreate` events with "exceeded quota" (`kubectl describe rs -n k8squest`)
 
 **The Solution:**
 ```yaml
@@ -438,15 +438,17 @@ requests.cpu     500m  2       ← Usage vs limit
 requests.memory  512Mi 2Gi
 ```
 
-### Check Pod Events
+### Check ReplicaSet Events
+
+Quota is checked when the Pod object is created, so a rejected Pod never exists to describe. Its controller reports the failure instead:
 
 ```bash
-kubectl describe pod my-pod -n k8squest
+kubectl describe rs -n k8squest
 ```
 
 Look for:
 ```
-Warning  FailedScheduling  ... exceeded quota: compute-quota, requested: requests.cpu=2500m
+Warning  FailedCreate  ... Error creating: pods "..." is forbidden: exceeded quota: compute-quota, requested: requests.cpu=2500m
 ```
 
 ### List All Pods in Namespace

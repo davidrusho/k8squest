@@ -25,5 +25,11 @@ kubectl label node "$NODE_NAME" accelerator=gpu --overwrite
 echo "✅ Node labels:"
 kubectl get node "$NODE_NAME" --show-labels
 
+# The engine runs only this script when a level has a setup.sh, so deploy the
+# broken state here once the node is prepared.
+LEVEL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "📦 Deploying the broken resources..."
+kubectl apply -f "$LEVEL_DIR/broken.yaml"
+
 echo ""
 echo "✅ Setup complete! Node is ready for GPU workload scheduling."

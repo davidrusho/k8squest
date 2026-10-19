@@ -6,6 +6,14 @@ As required by section 4(b) of that license, this file states that the files
 listed below have been changed from the upstream versions. Files not listed
 are unchanged from upstream.
 
+## Level fixes: six levels now start in the broken state they describe
+
+### Modified
+
+- `worlds/world-4-storage/level-37-secret-encoding` - `broken.yaml` no longer passes `validate.sh` before the player acts: the Secret's `username` is base64-encoded twice, so the pod receives `YWRtaW4=` and crash-loops on its username check. Mission, hints and debrief describe the double encoding.
+- `worlds/world-5-security/level-43-resourcequota` and `level-48-pod-security` - the broken object is now a Deployment (`resource-hungry-app`, `secure-app`) instead of a bare Pod. Quota and Pod Security `enforce` apply to Pods, so the Deployment is admitted and the engine's `kubectl apply` succeeds; the rejection shows as `FailedCreate` events on the ReplicaSet (`kubectl describe rs`, `kubectl get events`). Before, the bare Pod was rejected at apply time and the engine aborted with "Deployment failed". `broken.yaml`, `solution.yaml`, `validate.sh`, mission, hints and debrief were updated; `validate.sh` of level 48 now also requires a `seccompProfile` instead of only warning.
+- `worlds/world-5-security/level-45-node-affinity`, `level-46-taints-tolerations`, `level-50-chaos-finale` - `setup.sh` now applies `broken.yaml` after preparing the node. The engine runs only `setup.sh` when a level has one, so the player used to get an empty namespace.
+
 ## World 7: Troubleshooting, and multi-node cluster support
 
 ### Added

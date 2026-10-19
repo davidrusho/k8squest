@@ -6,6 +6,10 @@
 
 ## � The Critical Lesson: Base64 is NOT Security
 
+**What was wrong:** the username had been base64-encoded twice (`WVdSdGFXND0=`). Kubernetes
+decodes a Secret's `data` values once, so the pod received `YWRtaW4=` and rejected it as an
+invalid username. Decoding the value by hand, with no key, is exactly why this is not security.
+
 **What You Saw:**
 ```yaml
 data:

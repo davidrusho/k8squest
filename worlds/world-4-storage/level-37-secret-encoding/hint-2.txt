@@ -1,7 +1,8 @@
 🎯 HINT 2: Base64 is NOT Encryption!
 
-⚠️ **Critical Concept:** The Secret in this level IS properly base64-encoded, 
-but base64 encoding provides NO security!
+⚠️ **Critical Concept:** The username in this Secret was base64-encoded twice, so the pod
+receives "YWRtaW4=" instead of "admin". Decoding it once shows how little protection base64
+gives: anyone can peel off every layer, no key needed!
 
 📚 Understanding the Difference:
 

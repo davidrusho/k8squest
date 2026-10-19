@@ -16,11 +16,17 @@ description: |
   But here's the critical lesson: base64 is NOT encryption - it's just encoding!
   Anyone with kubectl access can decode these "secrets" instantly.
   
+  Right now the database-client pod is crash-looping: its log says the username
+  has an invalid format. Someone encoded the username before putting it in the
+  Secret, and then the tooling encoded it again. Decode it and see what the pod
+  really receives.
+  
   This level demonstrates why proper secret management requires more than just
   Kubernetes Secrets. You need encryption-at-rest, RBAC, and ideally external
   secret managers like Vault or Sealed Secrets.
   
 learning_objectives:
+  - Decode a Secret value to see what a pod actually receives (fix a double-encoded value)
   - Understand the difference between encoding and encryption
   - Learn why base64 provides zero security
   - Discover how easily Secrets can be decoded

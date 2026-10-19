@@ -1,6 +1,7 @@
-# BROKEN: Pod violates restricted Pod Security Standard
-# Problem: Multiple security violations
-# Result: Pod rejected by admission controller
+# BROKEN: Deployment's Pod template violates the restricted Pod Security Standard
+# Problem: Multiple security violations in the Pod template
+# Result: The Deployment is created, but its ReplicaSet cannot create Pods:
+#         Pod Security admission (enforce: restricted) rejects each Pod (FailedCreate)
 
 apiVersion: v1
 kind: Namespace
@@ -12,20 +13,31 @@ metadata:
     pod-security.kubernetes.io/warn: restricted
 
 ---
-apiVersion: v1
-kind: Pod
+# Enforce mode is applied to Pods, not to the Deployment that owns the template
+# (warn and audit modes do look at the Deployment, so kubectl apply prints a warning).
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: secure-app
   namespace: k8squest
 spec:
-  containers:
-  - name: app
-    image: nginx:latest
-    securityContext:
-      runAsUser: 0  # ❌ Root user - violates restricted!
-      allowPrivilegeEscalation: true  # ❌ Violates restricted!
-      # ❌ Missing: runAsNonRoot, capabilities drop, seccompProfile
-      
+  replicas: 1
+  selector:
+    matchLabels:
+      app: secure-app
+  template:
+    metadata:
+      labels:
+        app: secure-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:latest
+        securityContext:
+          runAsUser: 0  # ❌ Root user - violates restricted!
+          allowPrivilegeEscalation: true  # ❌ Violates restricted!
+          # ❌ Missing: runAsNonRoot, capabilities drop, seccompProfile
+
 # Restricted Pod Security Standard requires:
 # 1. runAsNonRoot: true
 # 2. allowPrivilegeEscalation: false
@@ -33,5 +45,7 @@ spec:
 # 4. seccompProfile type RuntimeDefault or Localhost
 # 5. runAsUser must NOT be 0
 #
-# Result: Admission webhook blocks pod creation
-# Error: "pods restricted: runAsNonRoot != true, allowPrivilegeEscalation != false"
+# Result: No Pod exists. The ReplicaSet reports FailedCreate:
+#   kubectl describe rs -n k8squest   (Events)
+#   kubectl get events -n k8squest
+# Error: 'pods "secure-app-..." is forbidden: violates PodSecurity "restricted:latest": ...'

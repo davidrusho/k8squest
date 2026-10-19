@@ -1,6 +1,6 @@
 # BROKEN: ResourceQuota exceeded
-# Problem: Pod requests more resources than namespace quota allows
-# Result: Pod stuck in Pending - insufficient quota
+# Problem: The Deployment's Pod template requests more CPU than the namespace quota allows
+# Result: The Deployment is created, but its ReplicaSet cannot create the Pod (FailedCreate)
 
 apiVersion: v1
 kind: ResourceQuota
@@ -16,24 +16,37 @@ spec:
     pods: "10"  # Maximum 10 pods
 
 ---
-# This pod requests too much!
-apiVersion: v1
-kind: Pod
+# This Deployment's Pod template requests too much!
+# The Deployment object itself is admitted (quota counts Pods, not Deployments),
+# but the ReplicaSet's attempt to create the Pod is rejected by the quota.
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: resource-hungry-app
   namespace: k8squest
 spec:
-  containers:
-  - name: app
-    image: nginx:latest
-    resources:
-      requests:
-        cpu: "2500m"  # ❌ Requests 2.5 CPUs but quota only allows 2 total!
-        memory: "1Gi"
-      limits:
-        cpu: "3"
-        memory: "2Gi"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resource-hungry-app
+  template:
+    metadata:
+      labels:
+        app: resource-hungry-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:latest
+        resources:
+          requests:
+            cpu: "2500m"  # ❌ Requests 2.5 CPUs but quota only allows 2 total!
+            memory: "1Gi"
+          limits:
+            cpu: "3"
+            memory: "2Gi"
 
-# Result: Pod can't be scheduled
-# Error: "exceeded quota: compute-quota, requested: requests.cpu=2500m"
-# Quota only has 2 CPUs available, pod wants 2.5 CPUs
+# Result: No Pod exists. The ReplicaSet reports FailedCreate:
+#   kubectl describe rs -n k8squest   (Events)
+#   kubectl get events -n k8squest
+# Error: "pods ... is forbidden: exceeded quota: compute-quota, requested: requests.cpu=2500m"
+# Quota only has 2 CPUs available, the Pod wants 2.5 CPUs

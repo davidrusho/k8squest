@@ -1,6 +1,6 @@
 ✅ HINT 3: Complete Solution
 
-Fix: Base64 encode the Secret data values
+Fix: Encode the username exactly once (Secret data values are the base64 of the plain value)
 
 📝 In Secret:
 ```yaml
@@ -28,6 +28,8 @@ echo -n "secretpass123" | base64
 ```bash
 kubectl delete -f broken.yaml
 kubectl apply -f solution.yaml
+# (a crash-looping pod only re-reads its Secret when its container restarts; deleting it
+#  first, as above, avoids waiting out the restart back-off)
 kubectl logs database-client -n k8squest
 # Should show "Connected successfully!"
 ```
