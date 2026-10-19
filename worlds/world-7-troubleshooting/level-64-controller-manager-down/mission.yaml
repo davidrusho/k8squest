@@ -1,0 +1,28 @@
+level: 64
+title: "A Deployment That Creates Nothing"
+name: "A Deployment That Creates Nothing"
+objective: "Find out why the orders Deployment never gets a ReplicaSet or any pods, and repair the control-plane component that should create them"
+world: "Troubleshooting"
+difficulty: "advanced"
+xp: 300
+expected_time: "15-20 minutes"
+concepts:
+  - kube-controller-manager
+  - static-pods
+  - controllers
+  - imagepullbackoff
+description: |
+  The orders Deployment was created a few minutes ago and asks for three replicas.
+  kubectl shows it as 0/3, and there is no ReplicaSet and no pod at all, not even a
+  Pending one.
+
+  Creating the ReplicaSet and the pods is the job of a controller that runs in the
+  control plane. Find it, find out why it is not running, and repair it. Control-plane
+  components are static pods defined on the control-plane node:
+
+    docker exec -it k8squest-multinode-control-plane bash
+learning_objectives:
+  - Tell "the pods are Pending" from "there are no pods": different components own them
+  - Name what kube-controller-manager does (Deployment and ReplicaSet controllers among others)
+  - Read ImagePullBackOff on a kube-system static pod with kubectl describe
+  - Repair a static pod manifest on the control-plane node

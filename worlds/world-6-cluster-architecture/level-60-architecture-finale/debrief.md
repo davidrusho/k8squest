@@ -34,4 +34,4 @@ The Linux Foundation lists kubernetes.io/docs, the Kubernetes blog, helm.sh/docs
 
 ## 🚀 What's Next
 
-World 7 (troubleshooting on multi-node clusters) and World 8 (kubeadm on Lima VMs) are in progress.
+**World 7 (Troubleshooting)** is next: broken nodes, control-plane components, DNS, the pod network, metrics and container logs on a 3-node kind cluster. The game creates that cluster for you the first time you enter it, and `docker exec -it <node> bash` is how you reach a node. World 8 (kubeadm on Lima VMs) is in progress.

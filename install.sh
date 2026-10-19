@@ -2,6 +2,21 @@
 # Modified 2026 by David Rusho; see CHANGES.md
 set -e
 
+# Optional: --multinode also creates the 3-node cluster World 7 runs on. Without it the
+# engine creates that cluster the first time a World 7 level is started.
+CREATE_MULTINODE=0
+for arg in "$@"; do
+  case "$arg" in
+    --multinode) CREATE_MULTINODE=1 ;;
+    -h|--help)
+      echo "Usage: ./install.sh [--multinode]"
+      echo "  --multinode  also create the 3-node kind cluster for World 7 now"
+      echo "               (otherwise the game creates it on first entry to World 7)"
+      exit 0 ;;
+    *) echo "❌ Unknown option: $arg (try --help)"; exit 1 ;;
+  esac
+done
+
 echo "🎮 K8sQuest Installation"
 echo "========================"
 echo ""
@@ -63,13 +78,28 @@ echo "✅ Python packages installed"
 echo ""
 
 # Create Kubernetes cluster
-if ! kind get clusters | grep k8squest >/dev/null 2>&1; then
+if ! kind get clusters | grep -qx k8squest; then
   echo "🔧 Creating Kubernetes cluster..."
   kind create cluster --name k8squest --config kind/cluster.yaml
 else
   echo "✅ Cluster already exists"
 fi
 
+
+# World 7 runs on its own 3-node cluster, context kind-k8squest-multinode
+if [ "$CREATE_MULTINODE" = 1 ]; then
+  if ! kind get clusters | grep -qx k8squest-multinode; then
+    echo "🔧 Creating the 3-node cluster for World 7..."
+    kind create cluster --name k8squest-multinode --config kind/multinode.yaml --wait 180s
+    kubectl --context kind-k8squest-multinode create namespace k8squest --dry-run=client -o yaml | kubectl --context kind-k8squest-multinode apply -f -
+    [ -f rbac/k8squest-rbac.yaml ] && kubectl --context kind-k8squest-multinode apply -f rbac/k8squest-rbac.yaml
+  else
+    echo "✅ Multi-node cluster already exists"
+  fi
+fi
+
+# The game cluster stays the current context; the engine switches to the multi-node one
+# when a World 7 level starts, and back for the other worlds.
 kubectl config use-context kind-k8squest
 
 # Create k8squest namespace

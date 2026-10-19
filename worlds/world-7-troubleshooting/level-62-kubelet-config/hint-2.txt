@@ -1,0 +1,13 @@
+🔍 HINT 2: Ask the Kubelet
+
+systemd keeps starting the kubelet and the kubelet keeps exiting. Its own log says why:
+
+   journalctl -u kubelet --no-pager -n 20
+
+Look for a line with "command failed" or "failed to run Kubelet", and the file
+it names. Which file does the kubelet read its settings from?
+
+   systemctl cat kubelet        # the --config flag in the drop-in
+   cat /var/lib/kubelet/config.yaml
+
+🤔 Question: does the path in the error exist on this node?

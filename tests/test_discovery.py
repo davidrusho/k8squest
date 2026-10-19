@@ -31,10 +31,10 @@ console = Console()
 
 BASE_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent
 
-# Update these when a new world lands (Worlds 7-8 are in progress)
-EXPECTED_WORLD_ORDERS = [1, 2, 3, 4, 5, 6]
-EXPECTED_LEVELS = 60
-EXPECTED_XP = 14850
+# Update these when a new world lands (World 8 is in progress)
+EXPECTED_WORLD_ORDERS = [1, 2, 3, 4, 5, 6, 7]
+EXPECTED_LEVELS = 70
+EXPECTED_XP = 18000
 
 
 def level_dirs():
@@ -90,7 +90,8 @@ def check_mandatory_files():
 
 def check_world_yaml_clusters():
     problems = []
-    world_dirs = [d for d in sorted(BASE_DIR.glob("worlds/*")) if d.is_dir()]
+    # a directory whose name starts with "_" (worlds/_shared) holds shared helpers, not a world
+    world_dirs = [d for d in sorted(BASE_DIR.glob("worlds/*")) if d.is_dir() and not d.name.startswith("_")]
     for world_dir in world_dirs:
         world_yaml = world_dir / "world.yaml"
         if not world_yaml.is_file():
@@ -256,14 +257,33 @@ def check_milestones_not_on_replay():
     return None
 
 
+def check_shared_dirs_are_not_worlds():
+    """worlds/_shared (helpers common to several worlds) has no world.yaml and no level-* dirs:
+    discovery must not report it as a world, and every level with a solution.sh must also
+    have the solution.yaml reference the player sees."""
+    problems = []
+    if not (BASE_DIR / "worlds" / "_shared" / "lib.sh").is_file():
+        problems.append("worlds/_shared/lib.sh is missing")
+    if (BASE_DIR / "worlds" / "_shared" / "world.yaml").exists():
+        problems.append("worlds/_shared must not contain a world.yaml")
+    if any(w.dir_name.startswith("_") for w in discover_worlds(BASE_DIR)):
+        problems.append("discovery reported a _shared directory as a world")
+    for sol in BASE_DIR.glob("worlds/*/level-*/solution.sh"):
+        if not (sol.parent / "solution.yaml").is_file():
+            problems.append(f"{sol.parent.name}: solution.sh without solution.yaml")
+        if "broken.yaml" not in (sol.parent / "setup.sh").read_text(errors="replace"):
+            problems.append(f"{sol.parent.name}: setup.sh never applies broken.yaml")
+    return "; ".join(problems) or None
+
+
 def test_discovery():
     """Test world discovery against the worlds/ tree"""
 
     tests = [
         # (check, description)
-        (check_world_order, "6 worlds discovered, ordered 1-6 by world.yaml"),
-        (check_level_count, "60 levels on disk and discovered"),
-        (check_xp_total, "XP total is 14850, summed from mission.yaml files"),
+        (check_world_order, "7 worlds discovered, ordered 1-7 by world.yaml"),
+        (check_level_count, "70 levels on disk and discovered"),
+        (check_xp_total, "XP total is 18000, summed from mission.yaml files"),
         (check_unique_level_names, "Level names are unique across worlds"),
         (check_mandatory_files, "Every level has the 8 mandatory files"),
         (check_world_yaml_clusters, "Every world has a world.yaml with a valid cluster"),
@@ -272,6 +292,7 @@ def test_discovery():
         (check_discovery_rejects_malformed_world_yaml, "Discovery rejects a malformed world.yaml"),
         (check_milestones_across_totals, "Milestones fire once each and never collide for T = 1, 2, 3, 10, 11, 20, 50, 60, 76"),
         (check_milestones_not_on_replay, "Replaying a completed level fires no milestone"),
+        (check_shared_dirs_are_not_worlds, "worlds/_shared is not a world; solution.sh levels keep solution.yaml and apply broken.yaml"),
     ]
 
     passed = 0

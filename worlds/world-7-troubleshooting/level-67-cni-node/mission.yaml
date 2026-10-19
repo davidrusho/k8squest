@@ -1,0 +1,25 @@
+level: 67
+title: "A Node Without a Network"
+name: "A Node Without a Network"
+objective: "Find out why worker2 is NotReady and why its pod network is not set up, and fix it from kubectl"
+world: "Troubleshooting"
+difficulty: "expert"
+xp: 350
+expected_time: "15-25 minutes"
+concepts:
+  - cni
+  - daemonset
+  - node-notready
+  - nodeselector
+description: |
+  The node k8squest-multinode-worker2 is NotReady, and the edge-cache Deployment
+  pinned to it is Pending. This is not the kubelet: it is running and reporting.
+
+  Read the node's Ready condition carefully. It names what is missing. Then find
+  out why the thing that should provide it is not running on this node. You can fix
+  this one with kubectl alone.
+learning_objectives:
+  - Read the Ready condition message of a node (kubectl describe node)
+  - Recognise "cni plugin not initialized" and what supplies the CNI configuration
+  - Compare a DaemonSet's DESIRED count with the number of nodes
+  - Find why a DaemonSet skips a node (nodeSelector, node labels, taints)

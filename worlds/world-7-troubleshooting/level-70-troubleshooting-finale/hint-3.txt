@@ -1,0 +1,16 @@
+🔍 HINT 3: When Drain Cannot Finish
+
+The kubelet is what confirms a pod has stopped. With it down, the evicted pods stay
+Terminating and drain times out. That is expected, and it is not what the Deployment
+is waiting for: the ReplicaSet does not count Terminating pods, so it has already
+created replacements, and the scheduler has put them on the node that still works
+(the lost one is cordoned).
+
+   kubectl get pods -n k8squest -o wide
+
+If you want the stuck entries gone from the API (the node is not coming back):
+   kubectl delete pod <name> -n k8squest --force --grace-period=0
+
+Force delete only removes the API object. It does not stop anything on the dead node,
+so use it only when you know that node is not running the workload any more.
+Check: 4 shop pods Running, all on k8squest-multinode-worker2.

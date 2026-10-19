@@ -1,0 +1,14 @@
+🔍 HINT 2: Ask for the Right Stream
+
+   kubectl logs <pod> -n k8squest -c invoice-api
+   kubectl logs <pod> -n k8squest -c invoice-api --previous
+
+While the container is waiting in CrashLoopBackOff, the current instance has no
+output yet, and --previous shows the instance that just died. Its last line says what
+the application needs.
+
+Then find where that setting should come from:
+   kubectl describe pod <pod> -n k8squest      # Environment Variables from:
+   kubectl get configmap invoice-config -n k8squest -o yaml
+
+🤔 Question: compare the name the application asks for with the keys in the ConfigMap.

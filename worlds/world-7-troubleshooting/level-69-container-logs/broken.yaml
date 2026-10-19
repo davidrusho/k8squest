@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: invoice-config
+  namespace: k8squest
+data:
+  LOG_LEVEL: info
+  DB_HOTS: db.internal        # ❌ the application reads DB_HOST
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: invoice-api
+  namespace: k8squest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: invoice-api
+  template:
+    metadata:
+      labels:
+        app: invoice-api
+    spec:
+      containers:
+      - name: log-shipper        # first container: this is the one plain `kubectl logs` shows
+        image: busybox:1.37.0
+        command:
+        - sh
+        - -c
+        - |
+          while true; do
+            echo "$(date +%T) log-shipper: 0 records queued"
+            sleep 5
+          done
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi
+      - name: invoice-api
+        image: busybox:1.37.0
+        envFrom:
+        - configMapRef:
+            name: invoice-config
+        command:
+        - sh
+        - -c
+        - |
+          echo "invoice-api 2.3.1 starting, LOG_LEVEL=${LOG_LEVEL:-unset}"
+          if [ -z "$DB_HOST" ]; then
+            echo "FATAL: DB_HOST is not set; refusing to start without a database" >&2
+            exit 3
+          fi
+          echo "connected to database at $DB_HOST"
+          while true; do
+            echo "$(date +%T) invoice-api: handled request"
+            sleep 5
+          done
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi

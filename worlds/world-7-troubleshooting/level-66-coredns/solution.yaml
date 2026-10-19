@@ -1,0 +1,10 @@
+# Level 66 has two fixes, both in kube-system. The workload in k8squest is correct.
+#
+#   kubectl exec -n k8squest dns-client -- nslookup web.k8squest.svc.cluster.local   # timeout: nobody answers
+#   kubectl get deployment coredns -n kube-system        # 0/0 ✅ scale it back: 2 replicas
+#   kubectl scale deployment coredns -n kube-system --replicas=2
+#   kubectl exec -n k8squest dns-client -- nslookup web.k8squest.svc.cluster.local   # now: NXDOMAIN
+#   kubectl edit configmap coredns -n kube-system
+#     kubernetes cluster.locl in-addr.arpa ip6.arpa {     ❌
+#     kubernetes cluster.local in-addr.arpa ip6.arpa {    ✅ the cluster domain
+#   kubectl rollout restart deployment/coredns -n kube-system   # or allow about two minutes for the reload plugin

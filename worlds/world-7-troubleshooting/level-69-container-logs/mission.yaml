@@ -1,0 +1,26 @@
+level: 69
+title: "The Crash You Can Only Read Afterwards"
+name: "The Crash You Can Only Read Afterwards"
+objective: "Read the output of a crash-looping container, find the setting it complains about and fix the configuration it comes from"
+world: "Troubleshooting"
+difficulty: "intermediate"
+xp: 250
+expected_time: "10-15 minutes"
+concepts:
+  - kubectl-logs
+  - previous-logs
+  - multi-container-pods
+  - configmaps
+description: |
+  The invoice-api pod has two containers: a healthy log-shipper and the invoice-api
+  container itself. The pod is not Ready and its restart count keeps climbing.
+
+  The reason is written to the container's output, but only for a container that has
+  already died, and `kubectl logs` shows the wrong container unless you ask for the
+  right one. Find the message, find where that setting comes from, and fix it at its
+  source.
+learning_objectives:
+  - Read a crashed container's output with kubectl logs --previous
+  - Choose a container in a multi-container pod with -c
+  - Follow an environment variable back to the ConfigMap that supplies it (envFrom)
+  - Restart pods so they pick up a changed ConfigMap

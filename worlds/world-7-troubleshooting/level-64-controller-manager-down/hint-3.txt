@@ -1,0 +1,13 @@
+🔍 HINT 3: The Fix
+
+In /etc/kubernetes/manifests/kube-controller-manager.yaml (inside the control-plane
+node) the image is:
+
+   image: registry.k8s.io/kube-controller-manager:v1.73.0     ❌
+
+The cluster runs Kubernetes v1.37.0. Other control-plane manifests show the right
+tag (grep image: /etc/kubernetes/manifests/*.yaml). Correct it and save; the kubelet
+recreates the pod by itself.
+
+   kubectl get pods -n kube-system -w
+   kubectl get deployment,rs,pods -n k8squest

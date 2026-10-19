@@ -1,0 +1,16 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ Which pods are stuck, and where are they?
+   kubectl get pods -n k8squest -o wide
+
+2️⃣ Why are they Pending?
+   kubectl describe pod -n k8squest -l app=inventory | tail -15
+
+3️⃣ What state are the nodes in?
+   kubectl get nodes
+
+4️⃣ Look at the stuck node's conditions and taints:
+   kubectl describe node k8squest-multinode-worker
+
+🤔 Question: who reports a node's health to the control plane, and what happens
+when that reporter stops?

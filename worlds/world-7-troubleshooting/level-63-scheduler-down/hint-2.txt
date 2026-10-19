@@ -1,0 +1,13 @@
+🔍 HINT 2: Read the Component's Log
+
+   kubectl logs -n kube-system kube-scheduler-k8squest-multinode-control-plane
+   kubectl describe pod -n kube-system kube-scheduler-k8squest-multinode-control-plane
+
+The log names a file that cannot be found. This pod is a static pod: the kubelet
+on the control-plane node starts it from a manifest file, and the Deployment/
+ReplicaSet machinery does not manage it. Where do those manifests live?
+
+   docker exec -it k8squest-multinode-control-plane bash
+   ls /etc/kubernetes/manifests
+
+🤔 Question: which flag in kube-scheduler.yaml points at the missing file?

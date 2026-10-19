@@ -28,9 +28,9 @@
                     ▼                       ▼
         ┌───────────────────┐   ┌───────────────────┐
         │  Safety Module    │   │  Mission Content  │
-        │  (safety.py)      │   │  (Worlds 1-6)     │
+        │  (safety.py)      │   │  (Worlds 1-7)     │
         │                   │   │                   │
-        │  • Pattern Match  │   │  • 60 Levels      │
+        │  • Pattern Match  │   │  • 70 Levels      │
         │  • RBAC Check     │   │  • Broken Configs │
         │  • Confirmation   │   │  • Solutions      │
         └───────────────────┘   │  • Hints          │
@@ -197,6 +197,21 @@ Layer 3: Namespace Isolation (Kubernetes)
 │          🔥 FINALE (Level 60)                              │
 └─────────────────────────────────────────────────────────────┘
 
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  WORLD 7: Troubleshooting (Levels 61-70)                    │
+│  Difficulty: ⭐⭐⭐ Intermediate to Expert                  │
+│  XP: 3,150                                                  │
+│  Status: COMPLETE                                           │
+│  Cluster: kind-multinode (1 control plane + 2 workers),     │
+│           created by the engine on first entry              │
+│                                                             │
+│  Topics: kubelet, scheduler, controller manager, API       │
+│          server, CoreDNS, CNI, metrics-server, container   │
+│          logs, etcd snapshot, node loss (cordon/drain)     │
+│          🔥 FINALE (Level 70)                              │
+└─────────────────────────────────────────────────────────────┘
+
 ═══════════════════════════════════════════════════════════════════
 
                     Technology Stack
@@ -206,7 +221,8 @@ Layer 3: Namespace Isolation (Kubernetes)
 ├─────────────────────┼─────────────────────────────────────────┤
 │ Game Engine         │ Python 3.x                              │
 │ UI Framework        │ rich (Python TUI library)               │
-│ Kubernetes          │ kind (Kubernetes in Docker)             │
+│ Kubernetes          │ kind (Kubernetes in Docker); World 7    │
+│                     │ uses a 3-node kind cluster              │
 │ Container Runtime   │ Docker Desktop                          │
 │ CLI Tool            │ kubectl                                 │
 │ Data Format         │ YAML (configs), JSON (progress)         │
@@ -223,9 +239,9 @@ Layer 3: Namespace Isolation (Kubernetes)
 ┌────────────────────────────────────────────────────────────────┐
 │  📊 K8sQuest Statistics                                        │
 ├────────────────────────────────────────────────────────────────┤
-│  Total Levels:              60 (6 worlds of 10)               │
-│  Total XP Available:        14,850                            │
-│  Worlds:                    6                                 │
+│  Total Levels:              70 (7 worlds of 10)               │
+│  Total XP Available:        18,000                            │
+│  Worlds:                    7                                 │
 │  Lines of Code (Engine):    ~1,500                            │
 │  Lines of Documentation:    ~3,000+                           │
 │  Safety Test Coverage:      20 tests, 100% passing            │
@@ -236,3 +252,25 @@ Layer 3: Namespace Isolation (Kubernetes)
 
 Created with ❤️ for Kubernetes learners worldwide
 ```
+
+## Clusters per world
+
+`world.yaml` names the cluster a world runs on (`cluster: kind` or `kind-multinode`), and
+`engine/level_reset.py` is the one place that maps it to a kubectl context:
+
+| `cluster:` | kind cluster | kubectl context | Config | Created by |
+|---|---|---|---|---|
+| `kind` | `k8squest` | `kind-k8squest` (`k3s-k8squest` with `K8S_CLUSTER_TYPE=k3s`) | `kind/cluster.yaml` | `install.sh` |
+| `kind-multinode` | `k8squest-multinode` | `kind-k8squest-multinode` | `kind/multinode.yaml` | the engine, on first entry to a World 7 level (or `install.sh --multinode`) |
+
+Before deploying a level the engine (`deploy_mission`) calls `ensure_world_cluster`: it
+creates the world's cluster if it is missing and switches `kubectl` to the world's context
+(also when the player goes back to a `cluster: kind` world). `setup.sh` and `validate.sh`
+get `K8SQUEST_CONTEXT` in their environment; `require_game_context` in
+`worlds/_shared/lib.sh` refuses to run against any other context. `tests/level_harness.py`
+and `engine/reset.py` use the same functions.
+
+A world may ship an optional `heal.sh` next to `world.yaml`. The engine, `engine/reset.py` and
+the harness run it before resetting a level, so a fault an earlier level left in the cluster
+(World 7 breaks kubelets, control-plane manifests, CoreDNS and kindnet) cannot block the reset
+that follows. World 7's `setup.sh` scripts also heal first and only then inject their own fault.

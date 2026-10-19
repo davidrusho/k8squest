@@ -1,0 +1,28 @@
+level: 63
+title: "Pods That Nobody Schedules"
+name: "Pods That Nobody Schedules"
+objective: "Find out why new pods stay Pending without a node and without events, and repair the control-plane component responsible"
+world: "Troubleshooting"
+difficulty: "advanced"
+xp: 300
+expected_time: "15-20 minutes"
+concepts:
+  - kube-scheduler
+  - static-pods
+  - control-plane
+  - pending-pods
+description: |
+  The checkout Deployment has three replicas and all three pods are Pending. They
+  have no node assigned and, unlike an unschedulable pod, they have no
+  FailedScheduling events either: nobody is even trying.
+
+  Every node is Ready. Work out which control-plane component is responsible, why it
+  is down, and repair it. On a kubeadm-style cluster the control-plane components
+  run as static pods defined by files on the control-plane node:
+
+    docker exec -it k8squest-multinode-control-plane bash
+learning_objectives:
+  - Recognise "Pending with no node and no events" as a missing scheduler
+  - Inspect a control-plane static pod with kubectl get/describe/logs -n kube-system
+  - Find the static pod manifests (/etc/kubernetes/manifests) on the control-plane node
+  - Fix a manifest in place and let the kubelet recreate the pod

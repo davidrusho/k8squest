@@ -1,0 +1,13 @@
+🔍 HINT 3: The Fix
+
+The kubelet configuration points authentication.x509.clientCAFile at
+/etc/kubernetes/pki/ca.crtt. Correct it (the file is /etc/kubernetes/pki/ca.crt):
+
+   vi /var/lib/kubelet/config.yaml
+   systemctl restart kubelet
+   systemctl status kubelet
+
+Then from your own terminal:
+
+   kubectl get nodes
+   kubectl get pods -n k8squest -o wide

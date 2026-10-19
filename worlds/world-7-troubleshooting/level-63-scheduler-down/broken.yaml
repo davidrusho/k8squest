@@ -1,0 +1,24 @@
+# The workload only. The fault (a wrong kubeconfig path in the kube-scheduler static pod
+# manifest) is injected on the control-plane node by setup.sh before this file is applied.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout
+  namespace: k8squest
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: checkout
+  template:
+    metadata:
+      labels:
+        app: checkout
+    spec:
+      containers:
+      - name: checkout
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi

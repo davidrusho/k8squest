@@ -1,0 +1,15 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ What does the client see?
+   kubectl logs dns-client -n k8squest --tail=3
+
+2️⃣ Repeat the lookup by hand and read the exact error:
+   kubectl exec -n k8squest dns-client -- nslookup web.k8squest.svc.cluster.local
+
+3️⃣ Does the Service itself look right?
+   kubectl get svc,endpoints -n k8squest
+
+4️⃣ Which component answers DNS queries in a cluster?
+   kubectl get svc,deployment,pods -n kube-system -l k8s-app=kube-dns
+
+🤔 Question: "timed out" and "NXDOMAIN" mean different things. Which one is it?

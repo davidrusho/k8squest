@@ -1,0 +1,18 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ What is the pod doing?
+   kubectl get pods -n k8squest
+
+   READY is not 2/2 and RESTARTS grows. The status flips between Error and CrashLoopBackOff.
+
+2️⃣ Read its output:
+   kubectl logs deploy/invoice-api -n k8squest
+
+   Look at the first line kubectl prints: "Defaulted container ... out of: ...".
+   Everything shown is healthy. Whose output is it?
+
+3️⃣ Which containers does the pod have?
+   kubectl get pod -n k8squest -l app=invoice-api -o jsonpath='{.items[0].spec.containers[*].name}'
+
+🤔 Question: how do you select a container, and how do you read the output of an
+instance that has already exited?

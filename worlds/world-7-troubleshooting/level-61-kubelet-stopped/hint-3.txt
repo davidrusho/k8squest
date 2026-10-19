@@ -1,0 +1,15 @@
+🔍 HINT 3: The Fix
+
+Inside the node (docker exec -it k8squest-multinode-worker bash):
+
+   systemctl enable --now kubelet
+
+`enable` makes it start at boot, `--now` also starts it right away.
+
+Then, from your own terminal:
+
+   kubectl get nodes
+   kubectl get pods -n k8squest -o wide
+
+The node turns Ready within seconds and the taint disappears; the Pending pods
+are scheduled on their own.

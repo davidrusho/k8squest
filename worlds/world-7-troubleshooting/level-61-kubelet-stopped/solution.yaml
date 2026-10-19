@@ -1,0 +1,8 @@
+# Level 61 has no manifest fix: the workload is correct. The fix is on the node.
+#
+#   docker exec -it k8squest-multinode-worker bash
+#   systemctl status kubelet            # inactive (dead), disabled
+#   journalctl -u kubelet --no-pager -n 20
+#   systemctl enable --now kubelet      # ✅ start it now AND at every boot
+#   exit
+#   kubectl get nodes                   # Ready within a few seconds

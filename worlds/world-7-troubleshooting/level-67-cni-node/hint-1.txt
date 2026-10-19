@@ -1,0 +1,14 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ Which node and why?
+   kubectl get nodes
+   kubectl describe node k8squest-multinode-worker2
+
+   Read the Ready condition's Reason and Message under Conditions. It does not say
+   the kubelet stopped; it says what the runtime is missing.
+
+2️⃣ The pods pinned to this node:
+   kubectl get pods -n k8squest -o wide
+
+🤔 Question: what provides a node's pod network, and how is that component deployed
+onto every node?

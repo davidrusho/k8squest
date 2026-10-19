@@ -1,0 +1,16 @@
+🔍 HINT 1: Observing the Problem
+
+Part 1 (backup):
+   kubectl -n kube-system get pods -l component=etcd
+   kubectl -n kube-system exec etcd-k8squest-multinode-control-plane -- etcdctl version
+
+   etcdctl is in the etcd image, not on the node. The pod has no shell, so call the
+   binary directly after `--`.
+
+Part 2 (lost node):
+   kubectl get nodes
+   kubectl get pods -n k8squest -o wide
+
+🤔 Question: etcdctl needs an endpoint and TLS credentials to talk to etcd. Where does
+the etcd static pod say which ones it uses?
+   docker exec k8squest-multinode-control-plane grep -E 'cert-file|key-file|trusted-ca|listen-client' /etc/kubernetes/manifests/etcd.yaml

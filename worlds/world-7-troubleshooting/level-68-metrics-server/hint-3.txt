@@ -1,0 +1,23 @@
+🔍 HINT 3: The Fix
+
+Add the flag to the metrics-server container's args:
+
+   kubectl edit deployment metrics-server -n kube-system
+
+   args:
+   - --cert-dir=/tmp
+   - --secure-port=10250
+   - ...
+   - --kubelet-insecure-tls        ✅ add this
+
+or in one command:
+
+   kubectl patch deployment metrics-server -n kube-system --type=json \
+     -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+
+Then wait for the pod to become Ready (20-30 seconds) and run:
+   kubectl top nodes
+   kubectl top pods -n k8squest
+
+Note: this flag is for lab clusters like kind. On a production cluster, give the
+kubelets certificates signed by the cluster CA instead.

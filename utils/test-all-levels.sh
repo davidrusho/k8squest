@@ -118,9 +118,11 @@ test_level() {
     fi
 }
 
-# A directory under worlds/ without world.yaml is invisible to the engine
+# A directory under worlds/ without world.yaml is invisible to the engine.
+# (worlds/_shared holds helpers shared by several worlds and is not a world.)
 for world_dir in worlds/*/; do
     world_dir=${world_dir%/}
+    case "$(basename "$world_dir")" in _*) continue ;; esac
     if [ ! -f "$world_dir/world.yaml" ]; then
         test_world "$world_dir" || true
     fi

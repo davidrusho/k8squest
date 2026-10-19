@@ -1,0 +1,13 @@
+🔍 HINT 2: Describe the Component
+
+   kubectl describe pod -n kube-system kube-controller-manager-k8squest-multinode-control-plane
+
+Read the Events at the bottom. A pod that cannot start has not run, so there is
+no log to read yet: events are the source here.
+
+The pod is a static pod, defined by a file on the control-plane node:
+
+   docker exec -it k8squest-multinode-control-plane bash
+   ls /etc/kubernetes/manifests
+
+🤔 Question: which field in kube-controller-manager.yaml does the pull error name?

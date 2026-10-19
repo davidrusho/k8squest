@@ -1,0 +1,26 @@
+# The workload only. The fault (a DaemonSet nodeSelector that excludes worker2, and worker2's
+# CNI config removed) is injected by setup.sh. This Deployment is pinned to worker2.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-cache
+  namespace: k8squest
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: edge-cache
+  template:
+    metadata:
+      labels:
+        app: edge-cache
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k8squest-multinode-worker2   # pinned: the pods can only run on this node
+      containers:
+      - name: edge-cache
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi

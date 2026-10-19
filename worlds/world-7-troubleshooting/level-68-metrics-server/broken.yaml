@@ -1,0 +1,25 @@
+# A workload whose usage kubectl top pods should report. The fault (metrics-server started
+# without --kubelet-insecure-tls, so it cannot verify kind's kubelet certificates) is injected
+# by setup.sh, after it has made sure metrics-server is installed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load
+  namespace: k8squest
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: load
+  template:
+    metadata:
+      labels:
+        app: load
+    spec:
+      containers:
+      - name: load
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi

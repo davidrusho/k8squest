@@ -1,0 +1,30 @@
+level: 65
+title: "The API Server Stopped Answering"
+name: "The API Server Stopped Answering"
+objective: "Bring the API server back using only what you can do on the control-plane node"
+world: "Troubleshooting"
+difficulty: "expert"
+xp: 350
+expected_time: "15-25 minutes"
+concepts:
+  - kube-apiserver
+  - etcd
+  - crictl
+  - static-pods
+description: |
+  Every kubectl command now hangs and fails with "Unable to connect to the server".
+  The status-page pods that were already running are still serving: running pods do
+  not need the API server. Nothing new can be created or changed until it is back.
+
+  With kubectl gone you cannot use `kubectl logs` or `kubectl describe`. Do what an
+  administrator does: log in to the control-plane node and ask the container runtime
+  directly.
+
+    docker exec -it k8squest-multinode-control-plane bash
+
+  Tools you have there: crictl, journalctl, systemctl. etcdctl is not installed on the node.
+learning_objectives:
+  - Diagnose a dead API server without kubectl (crictl ps -a, crictl logs)
+  - Relate the API server to etcd and read its --etcd-servers flag
+  - Repair the kube-apiserver static pod manifest on the node
+  - Know that running pods keep running while the control plane is down

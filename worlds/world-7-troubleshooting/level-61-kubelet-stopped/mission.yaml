@@ -1,0 +1,29 @@
+level: 61
+title: "A Worker That Went Quiet"
+name: "A Worker That Went Quiet"
+objective: "Bring the NotReady worker node back so the inventory pods can run on it"
+world: "Troubleshooting"
+difficulty: "intermediate"
+xp: 250
+expected_time: "10-15 minutes"
+concepts:
+  - node-notready
+  - kubelet
+  - systemd
+  - taints
+description: |
+  The worker node k8squest-multinode-worker has dropped out of the cluster. The
+  inventory Deployment is pinned to that node with a nodeSelector, and its two pods
+  have not started.
+
+  Nothing is wrong with the workload. Find out why the node is NotReady, then fix it
+  on the node itself. A kind node is a Docker container; your "SSH to the node" is:
+
+    docker exec -it k8squest-multinode-worker bash
+
+  The fix has to survive a reboot of the node, not just work right now.
+learning_objectives:
+  - Read a node's Ready condition and its taints with kubectl describe node
+  - Connect the unreachable taint to pods stuck in Pending
+  - Log in to a node and check the kubelet with systemctl and journalctl
+  - Start AND enable a systemd service

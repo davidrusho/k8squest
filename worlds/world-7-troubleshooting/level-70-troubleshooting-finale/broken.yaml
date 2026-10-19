@@ -1,0 +1,32 @@
+# The state of the cluster when the maintenance window opens: a ConfigMap the snapshot must
+# contain, and the shop workload. setup.sh also stops the kubelet on the first worker.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maintenance-marker
+  namespace: k8squest
+data:
+  window: "backup-before-maintenance"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop
+  namespace: k8squest
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: shop
+  template:
+    metadata:
+      labels:
+        app: shop
+    spec:
+      containers:
+      - name: shop
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi

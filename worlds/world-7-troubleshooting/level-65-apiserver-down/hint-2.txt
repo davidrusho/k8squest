@@ -1,0 +1,14 @@
+🔍 HINT 2: Read the Container's Own Log
+
+On the control-plane node:
+
+   crictl ps -a --name kube-apiserver
+   crictl logs <container-id> 2>&1 | tail -20
+
+The API server stores everything in etcd. The log shows which address it keeps
+trying and failing to reach. Compare it with where etcd really listens:
+
+   grep etcd-servers /etc/kubernetes/manifests/kube-apiserver.yaml
+   grep listen-client-urls /etc/kubernetes/manifests/etcd.yaml
+
+🤔 Question: do the two ports match?

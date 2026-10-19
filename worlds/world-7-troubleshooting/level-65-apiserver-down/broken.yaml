@@ -1,0 +1,25 @@
+# A workload that is already running when the API server breaks. It keeps serving while
+# the control plane is down. The fault (the etcd port in the kube-apiserver static pod
+# manifest) is injected on the control-plane node by setup.sh after this file is applied.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: status-page
+  namespace: k8squest
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: status-page
+  template:
+    metadata:
+      labels:
+        app: status-page
+    spec:
+      containers:
+      - name: status-page
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi

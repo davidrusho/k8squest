@@ -1,0 +1,8 @@
+# Level 64 has no manifest fix: the workload is correct. The fix is a static pod manifest on the control-plane node.
+#
+#   kubectl get deployment,rs,pods -n k8squest           # 0/3, no ReplicaSet, no pods
+#   kubectl get pods -n kube-system                      # kube-controller-manager-... ImagePullBackOff
+#   kubectl describe pod -n kube-system kube-controller-manager-k8squest-multinode-control-plane
+#     ... Failed to pull image "registry.k8s.io/kube-controller-manager:v1.73.0": not found
+#   docker exec -it k8squest-multinode-control-plane bash
+#   vi /etc/kubernetes/manifests/kube-controller-manager.yaml   # ✅ image: ...kube-controller-manager:v1.37.0

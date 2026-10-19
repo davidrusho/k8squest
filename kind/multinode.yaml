@@ -1,0 +1,16 @@
+# Added 2026 by David Rusho; see CHANGES.md
+# Three-node cluster (1 control plane, 2 workers) used by Worlds whose world.yaml
+# says `cluster: kind-multinode` (World 7). The engine creates it on first entry to
+# such a world; install.sh --multinode creates it ahead of time.
+# The node image is the same pinned kind v0.33.0 default (Kubernetes v1.37.0) as
+# kind/cluster.yaml. The cluster name is passed on the command line
+# (--name k8squest-multinode), so the kubectl context is kind-k8squest-multinode.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+  - role: worker
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+  - role: worker
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5

@@ -1,0 +1,13 @@
+🔍 HINT 3: The Fix
+
+The kindnet DaemonSet only runs on nodes labelled k8squest.io/cni=true. worker2
+lacks the label. Either give it the label:
+
+   kubectl label node k8squest-multinode-worker2 k8squest.io/cni=true
+
+or remove the nodeSelector entry from the DaemonSet. The DaemonSet controller then
+creates the pod, kindnet writes the CNI configuration, and the node turns Ready:
+
+   kubectl get pods -n kube-system -l app=kindnet -o wide
+   kubectl get nodes
+   kubectl get pods -n k8squest -o wide

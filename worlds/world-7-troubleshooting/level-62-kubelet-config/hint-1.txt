@@ -1,0 +1,14 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ What state are the nodes in?
+   kubectl get nodes
+
+2️⃣ What do the stuck pods say?
+   kubectl get pods -n k8squest -o wide
+
+3️⃣ Is this the same cause as a node whose kubelet is simply stopped? Log in and look:
+   docker exec -it k8squest-multinode-worker2 bash
+   systemctl status kubelet
+
+🤔 Question: "activating (auto-restart)" is different from "inactive (dead)".
+What does it tell you about the service?

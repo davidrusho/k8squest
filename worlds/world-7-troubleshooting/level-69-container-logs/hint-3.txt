@@ -1,0 +1,14 @@
+🔍 HINT 3: The Fix
+
+The application reads DB_HOST. The ConfigMap defines DB_HOTS. Rename the key:
+
+   kubectl edit configmap invoice-config -n k8squest
+
+Environment variables are read when a container starts, so restart the pods to
+make them pick up the change (a container waiting in CrashLoopBackOff may take up
+to five minutes to retry on its own):
+
+   kubectl rollout restart deployment/invoice-api -n k8squest
+   kubectl get pods -n k8squest
+
+Do not delete the log-shipper container: it is part of the pod.

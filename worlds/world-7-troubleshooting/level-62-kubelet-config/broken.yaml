@@ -1,0 +1,26 @@
+# The workload only. The fault (a wrong path in /var/lib/kubelet/config.yaml on worker2) is
+# injected on the node by setup.sh, which applies this file after the node has gone NotReady.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reports
+  namespace: k8squest
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: reports
+  template:
+    metadata:
+      labels:
+        app: reports
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k8squest-multinode-worker2   # pinned: the pods can only run on this node
+      containers:
+      - name: reports
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi

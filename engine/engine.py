@@ -33,7 +33,8 @@ else:  # Unix/Linux/Mac
     import tty
     import termios
 
-from level_reset import clear_leftovers, describe_failures, expected_context
+from level_reset import (clear_leftovers, describe_failures, ensure_world_cluster,
+                         expected_context, level_env, run_world_heal, world_cluster)
 from world_discovery import discover_worlds, milestones_for, total_levels, total_xp
 
 # Import retro UI components
@@ -879,6 +880,24 @@ Look for "2/2" ready replicas!
         """Deploy the broken Kubernetes resources"""
         console.print("\n[yellow]🚀 Deploying mission environment...[/yellow]")
 
+        # Worlds can run on different clusters (world.yaml `cluster:`): make the world's
+        # cluster exist (World 7 creates the 3-node kind cluster on first entry) and
+        # switch kubectl to its context. A world with `cluster: kind` switches back.
+        cluster = world_cluster(level_path)
+        ok, why = ensure_world_cluster(
+            cluster, self.base_dir, say=lambda m: console.print(f"[cyan]{escape(m)}[/cyan]"))
+        if not ok:
+            console.print(f"\n[red]⚠️  Cannot prepare the cluster for this world:[/red]")
+            console.print(f"[dim red]{escape(why)}[/dim red]")
+            return False
+        # A world may ship heal.sh to repair what an earlier level left broken
+        # (a stopped kubelet, a dead API server) before the checks below need the cluster.
+        ok, why = run_world_heal(level_path)
+        if not ok:
+            console.print(f"\n[red]⚠️  The world's cluster heal step failed:[/red]")
+            console.print(f"[dim red]{escape(why)}[/dim red]")
+            return False
+
         # Pre-flight connectivity check with timeout
         check = subprocess.run(
             ["kubectl", "get", "nodes", "--request-timeout=5s"],
@@ -943,6 +962,7 @@ Look for "2/2" ready replicas!
                     text=True,
                     encoding="utf-8",
                     errors="replace",
+                    env=level_env(level_path),
                 )
                 if result.returncode != 0:
                     console.print(f"[red]Setup failed:[/red]")
@@ -998,7 +1018,7 @@ Look for "2/2" ready replicas!
             text=True,
             encoding="utf-8",
             errors="replace",
-            env={**os.environ, "NAMESPACE": K8SQUEST_NAMESPACE}  # inject namespace for validate.sh
+            env={**level_env(level_path), "NAMESPACE": K8SQUEST_NAMESPACE}  # inject namespace + world context for validate.sh
         )
 
         # Always show output for debugging

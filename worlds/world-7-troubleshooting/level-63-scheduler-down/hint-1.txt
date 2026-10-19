@@ -1,0 +1,14 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ Where are the pods?
+   kubectl get pods -n k8squest -o wide
+
+2️⃣ Is anything saying why?
+   kubectl describe pod -n k8squest -l app=checkout | tail -8
+
+   A pod the scheduler could not place has FailedScheduling events. These have none.
+
+3️⃣ Check the control plane:
+   kubectl get pods -n kube-system
+
+🤔 Question: which component assigns pods to nodes, and what is its status?

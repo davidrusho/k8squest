@@ -6,6 +6,32 @@ As required by section 4(b) of that license, this file states that the files
 listed below have been changed from the upstream versions. Files not listed
 are unchanged from upstream.
 
+## World 7: Troubleshooting, and multi-node cluster support
+
+### Added
+
+- `worlds/world-7-troubleshooting/` - World 7 (`order: 7`, `cluster: kind-multinode`, `requires: [docker]`), levels 61-70, 3,150 XP: stopped kubelet (61), kubelet configuration fault (62), kube-scheduler manifest fault (63), kube-controller-manager manifest fault (64), kube-apiserver manifest fault diagnosed with `crictl` (65), CoreDNS scaled to 0 and a wrong Corefile zone (66), a node without its CNI configuration because the kindnet DaemonSet skips it (67), metrics-server missing `--kubelet-insecure-tls` (68), a crash-looping container read with `kubectl logs -c ... --previous` (69), and a finale with an etcd snapshot (`etcdctl` and `etcdutl` through `kubectl exec`) plus a lost worker (cordon and drain) (70). etcd restore and a multi-control-plane failover are not part of this world.
+- `worlds/world-7-troubleshooting/_shared/lib.sh` and `heal.sh` - `heal_cluster` puts back anything an earlier level or the player left broken (kubelet state, kubelet config and flags, the control-plane manifests, the CoreDNS Corefile and replicas, the kindnet nodeSelector and node label, metrics-server arguments, cordoned nodes) from pristine copies kept on the nodes in `/root/k8squest-pristine/`. Every `setup.sh` heals first and injects its own fault second.
+- `worlds/_shared/lib.sh` - helpers shared by Worlds 6 and 7: `log`, `need`, `retry`, `wait_available`, `require_game_context` (now checks `K8SQUEST_CONTEXT`) and `ensure_metrics_server` (moved here from World 6's `_shared/lib.sh`, version pin unchanged).
+- `engine/level_reset.py` `inotify_preflight`: before the engine creates the multi-node cluster on Linux it requires `fs.inotify.max_user_instances` >= 512 (the `k8squest` and `k8squest-multinode` clusters together fail with `too many open files` at the Ubuntu default of 128) and otherwise refuses with the `sysctl` commands; skipped where the file does not exist. Documented in `README.md` and `docs/contributing.md`.
+- `kind/multinode.yaml` - one control-plane node and two workers with the same pinned node image as `kind/cluster.yaml`; created as the cluster `k8squest-multinode` (context `kind-k8squest-multinode`).
+- `solution.sh` convention (levels 61-70): when a level has one, `tests/level_harness.py` runs it instead of applying `solution.yaml`; the engine never runs it. `solution.yaml` stays as the player-facing reference.
+
+### Modified
+
+- `engine/level_reset.py` - `context_for(cluster)` is the one mapping from a `world.yaml` `cluster:` value to a kubectl context; `ensure_world_cluster` creates the multi-node cluster when it is missing and switches the kubectl context (also back to the main cluster for `cluster: kind` worlds); `level_env` gives `setup.sh` and `validate.sh` `K8SQUEST_CONTEXT`; `run_world_heal` runs a world's optional `heal.sh`; `on_game_cluster` also accepts the multi-node context.
+- `engine/engine.py` - `deploy_mission` ensures the world's cluster, runs the world's heal step and passes `K8SQUEST_CONTEXT` to `setup.sh` and `validate.sh`.
+- `engine/reset.py` - switches to the level's world cluster before it deletes the namespace; `deploy_level` also ensures the cluster and runs the world's heal step.
+- `tests/level_harness.py` - supports `kind-multinode`, switches the kubectl context per world, deletes only clusters it created, runs `solution.sh`, runs the world's `heal.sh`, exits non-zero when a level is skipped, and takes repeatable `--world` and `--level` options (several `--level` run in the order given) and `--from-world N`.
+- `tests/test_level_reset.py` - tests for the context mapping and the cluster creation and switching, using a stub `kind`.
+- `tests/test_discovery.py` - expects 7 worlds, 70 levels and 18,000 XP; checks that `worlds/_shared` is not treated as a world.
+- `utils/test-all-levels.sh` - skips `worlds/_shared`.
+- `install.sh` - optional `--multinode` flag; the existing-cluster test now matches the exact name `k8squest` (a plain `grep k8squest` would also match `k8squest-multinode`).
+- World 6's `require_game_context` (now in `worlds/_shared/lib.sh`) accepts the context the engine exports in `K8SQUEST_CONTEXT`, so with `K8S_CLUSTER_TYPE=k3s` it now accepts `k3s-k8squest` (before, it accepted only `kind-k8squest`). `tests/level_harness.py` restores the kubectl context it started with when it exits. `ensure_world_cluster` reports a missing `kubectl`/`kind`/`docker`, checks the follow-up namespace and RBAC applies, and tells the player to delete a multinode cluster whose node containers are not running. World 7's lib defaults `K8SQUEST_CONTEXT` to `kind-k8squest-multinode`, so a script run by hand on the main cluster refuses.
+- `worlds/world-6-cluster-architecture/_shared/lib.sh` - sources `worlds/_shared/lib.sh` for the helpers that moved there.
+- `worlds/world-6-cluster-architecture/level-60-architecture-finale/debrief.md` - "What's Next" points to World 7.
+- `README.md`, `docs/ARCHITECTURE.md`, `docs/LEARNING-PATH.md`, `docs/contributing.md` - World 7, the second cluster, `heal.sh`, `solution.sh`, and totals (70 levels, 18,000 XP); the CKA troubleshooting row says what is and is not covered.
+
 ## World 6: Cluster Architecture & Extensions
 
 ### Added

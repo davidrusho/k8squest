@@ -1,0 +1,5 @@
+order: 7
+title: "Troubleshooting"
+description: "Broken nodes, control-plane components, DNS, CNI, metrics and container logs on a 3-node kind cluster, plus an etcd snapshot."
+cluster: kind-multinode
+requires: [docker]

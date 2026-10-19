@@ -1,0 +1,12 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ What exactly does kubectl say?
+   kubectl top nodes
+
+2️⃣ kubectl top calls an aggregated API. Is it available?
+   kubectl get apiservice v1beta1.metrics.k8s.io
+
+3️⃣ And what serves that API?
+   kubectl get deployment,pods -n kube-system -l k8s-app=metrics-server
+
+🤔 Question: is the pod running? Is it Ready? What does the difference mean for the APIService?

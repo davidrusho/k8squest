@@ -1,0 +1,17 @@
+🔍 HINT 2: Go to the Node
+
+The Ready condition is reported by the kubelet. The node controller adds the
+node.kubernetes.io/unreachable taint when the reports stop, and the scheduler
+will not place pods on a tainted node.
+
+A kind node is a Docker container. Open a shell in it:
+
+   docker exec -it k8squest-multinode-worker bash
+
+Then look at the service:
+
+   systemctl status kubelet
+   systemctl is-enabled kubelet
+   journalctl -u kubelet --no-pager -n 20
+
+🤔 Question: the unit is stopped. Is it also set to start at boot?

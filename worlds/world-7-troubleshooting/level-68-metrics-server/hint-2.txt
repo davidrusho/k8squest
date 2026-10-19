@@ -1,0 +1,12 @@
+🔍 HINT 2: Read the Pod's Log
+
+A pod that is Running but not Ready is failing its readiness check. Ask it why:
+
+   kubectl logs -n kube-system -l k8s-app=metrics-server --tail=20
+   kubectl describe pod -n kube-system -l k8s-app=metrics-server | tail -15
+
+metrics-server scrapes every node's kubelet. The log names the problem it hits when
+it does. kind's kubelets serve certificates that the cluster CA did not sign.
+
+🤔 Question: which metrics-server flag skips verifying the kubelets' certificates?
+(kubectl logs ... and the metrics-server README list its flags.)

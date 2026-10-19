@@ -29,7 +29,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 sys.path.insert(0, str(Path(__file__).parent))
-from level_reset import deploy_level
+from level_reset import deploy_level, ensure_world_cluster, world_cluster
 
 console = Console()
 
@@ -57,6 +57,11 @@ def reset_level_any_world(level):
         console.print(f"[red]Error: No broken.yaml or setup.sh found in {level}[/red]")
         return False
     console.print(f"[yellow]Resetting {world_dir.name}/{level}...[/yellow]\n")
+    # switch kubectl to the level's world cluster first, so the namespace delete below hits it
+    ok, why = ensure_world_cluster(world_cluster(level_path), base_dir, say=lambda m: console.print(f"[cyan]{m}[/cyan]"))
+    if not ok:
+        console.print(f"[red]Error: {why}[/red]")
+        return False
     # Delete namespace (clean slate)
     console.print("Deleting namespace...")
     result_del = run_kubectl_with_timeout(["kubectl", "delete", "namespace", "k8squest", "--ignore-not-found"], timeout=180)

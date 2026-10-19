@@ -1,0 +1,8 @@
+# Level 63 has no manifest fix: the workload is correct. The fix is a static pod manifest on the control-plane node.
+#
+#   kubectl get pods -n kube-system                      # kube-scheduler-... CrashLoopBackOff
+#   kubectl logs -n kube-system kube-scheduler-k8squest-multinode-control-plane
+#     ... "command failed" err="stat /etc/kubernetes/scheduler.cof: no such file or directory"
+#   docker exec -it k8squest-multinode-control-plane bash
+#   vi /etc/kubernetes/manifests/kube-scheduler.yaml     # ✅ --kubeconfig=/etc/kubernetes/scheduler.conf
+#   # no restart needed: the kubelet watches the manifests directory and recreates the pod

@@ -1,0 +1,12 @@
+🔍 HINT 2: Two Things to Check
+
+A. Is anything answering? Look at the CoreDNS Deployment: how many replicas are
+   ready? A client with no DNS server to talk to times out.
+
+B. Once something answers, is it serving the right domain? Read its configuration:
+   kubectl get configmap coredns -n kube-system -o yaml
+
+   The line that starts with `kubernetes` names the zone it is authoritative for.
+   What is this cluster's domain? (kubectl exec ... cat /etc/resolv.conf shows the search path.)
+
+🤔 Question: after you scale CoreDNS up, does the lookup work? If not, B is your answer.

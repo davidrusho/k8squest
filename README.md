@@ -8,7 +8,7 @@ Learn Kubernetes by fixing it.
 
 K8sQuest is a **local, game-based Kubernetes training platform** with an interactive GUI-like terminal interface. Each mission breaks something in Kubernetes. Your job is to fix it.
 
-**60 progressive challenges across 6 worlds** - from beginner to advanced. Worlds 7-8 (Troubleshooting on multi-node clusters, and kubeadm on Lima VMs) are in progress.
+**70 progressive challenges across 7 worlds** - from beginner to advanced. World 8 (kubeadm on Lima VMs) is in progress.
 
 No cloud. No AWS. No costs.
 
@@ -35,6 +35,8 @@ K8sQuest includes **comprehensive safety guards** (enabled by default):
 
 [Learn more about safety guards →](docs/SAFETY.md)
 
+**Note:** the game changes your current `kubectl` context (to `kind-k8squest` or `kind-k8squest-multinode`, whichever the world needs). To go back to yours, run `kubectl config use-context <your-context>`.
+
 ## Requirements
 - Docker Desktop (running)
 - kubectl
@@ -42,6 +44,7 @@ K8sQuest includes **comprehensive safety guards** (enabled by default):
 - bash
 - python3 (3.9+)
 - jq
+- Docker is also what World 7 (Troubleshooting) uses to reach the cluster nodes (`docker exec -it <node> bash`). The first World 7 level creates a second, 3-node kind cluster (`k8squest-multinode`, about 30-60 seconds, and it uses additional memory while it runs); `./install.sh --multinode` creates it ahead of time. World 7 needs internet access at setup time for level 68 (metrics-server). **Linux hosts:** the game cluster (1 node) and the World 7 cluster (3 nodes) together need `fs.inotify.max_user_instances` of at least 512 (Ubuntu defaults to 128; below that pods fail with `too many open files`, for example `kube-proxy` in CrashLoopBackOff). Before it creates the World 7 cluster the game checks the value and, if it is too low, stops and prints the fix from the [kind known-issues page](https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files): `sudo sysctl fs.inotify.max_user_instances=512`, and to keep it, `echo 'fs.inotify.max_user_instances = 512' | sudo tee /etc/sysctl.d/90-kind-inotify.conf && sudo sysctl --system`. The check is skipped where `/proc/sys/fs/inotify/max_user_instances` does not exist (macOS, Docker Desktop)
 - helm 3.13 or newer (only for World 6, Cluster Architecture & Extensions; Helm 4 works too). World 6 needs internet access at setup time: its levels download and install cert-manager, Gateway API, Envoy Gateway, metrics-server and the VPA recommender into the kind cluster
 
 ## Platform Support
@@ -227,6 +230,7 @@ python3 engine/reset.py level-28-endpoints          # World 3
 python3 engine/reset.py level-38-volume-permissions # World 4
 python3 engine/reset.py level-45-node-affinity      # World 5
 python3 engine/reset.py level-55-httproute-parentref # World 6
+python3 engine/reset.py level-63-scheduler-down      # World 7
 ```
 
 Or reset everything:
@@ -298,9 +302,21 @@ Cluster extensions and the packaging, routing and certificate tooling around the
 - ✅ ServiceAccount RoleBindings, and the RuntimeClass (CRI) and StorageClass (CSI) extension points
 - ✅ **Level 60**: three independent faults across cert-manager, Gateway API and RBAC
 
-**Today**: 6 worlds, 60 levels, 14,850 XP in total (summed from the `mission.yaml` files) | Beginner → Expert
+### 🔧 World 7: Troubleshooting (Levels 61-70) 
+**Difficulty**: Intermediate → Expert | **Total XP**: 3,150  
+Faults in the cluster itself rather than in a workload, on a 3-node kind cluster (1 control plane, 2 workers). "SSH to the node" is `docker exec -it <node> bash`. Needs `docker` on the host.
 
-**In progress**: World 7 (Troubleshooting on multi-node kind), World 8 (kubeadm on Lima VMs). New worlds are discovered from `worlds/<world>/world.yaml`, so the game picks them up as they land.
+- ✅ A NotReady worker: stopped kubelet, broken kubelet configuration, missing pod network (CNI)
+- ✅ Control-plane components as static pods: kube-scheduler, kube-controller-manager, kube-apiserver (diagnosed with `crictl` when `kubectl` is down)
+- ✅ CoreDNS: replicas and a wrong Corefile zone
+- ✅ `kubectl top` and the metrics-server pipeline
+- ✅ Container output: `kubectl logs -c ... --previous` in a multi-container pod
+- ✅ **Level 70**: 🔥 an etcd snapshot with `etcdctl`/`etcdutl`, and a lost worker (cordon, drain and what drain cannot do on a dead node)
+- Not in this world: etcd restore, kubeadm upgrades and HA control planes (World 8)
+
+**Today**: 7 worlds, 70 levels, 18,000 XP in total (summed from the `mission.yaml` files) | Beginner → Expert
+
+**In progress**: World 8 (kubeadm on Lima VMs). New worlds are discovered from `worlds/<world>/world.yaml`, so the game picks them up as they land.
 
 📖 **Full Blueprint**: See [docs/50-CHALLENGE-BLUEPRINT.md](docs/50-CHALLENGE-BLUEPRINT.md) for detailed descriptions of all 50 challenges.
 

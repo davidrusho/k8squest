@@ -1,0 +1,12 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ What exists in the namespace?
+   kubectl get deployment,replicaset,pods -n k8squest
+
+   There is a Deployment but no ReplicaSet and no pods. A Pending pod would at least exist.
+
+2️⃣ Who creates a ReplicaSet for a Deployment, and the pods for a ReplicaSet?
+   A controller in the control plane. Check the control-plane pods:
+   kubectl get pods -n kube-system
+
+🤔 Question: which one is not Ready, and what is its status column telling you?

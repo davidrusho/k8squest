@@ -1,0 +1,16 @@
+🔍 HINT 3: The Fix
+
+   kubectl scale deployment coredns -n kube-system --replicas=2
+
+and in the ConfigMap (kubectl edit configmap coredns -n kube-system):
+
+   kubernetes cluster.locl in-addr.arpa ip6.arpa {      ❌
+   kubernetes cluster.local in-addr.arpa ip6.arpa {     ✅
+
+CoreDNS's reload plugin picks up a changed Corefile eventually (the Kubernetes DNS page says to allow two minutes). To skip
+the wait:
+
+   kubectl rollout restart deployment/coredns -n kube-system
+
+Check:
+   kubectl exec -n k8squest dns-client -- nslookup web.k8squest.svc.cluster.local

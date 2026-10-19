@@ -1,0 +1,15 @@
+🔍 HINT 3: The Fix
+
+In /etc/kubernetes/manifests/kube-scheduler.yaml (inside the control-plane node)
+the command has:
+
+   --kubeconfig=/etc/kubernetes/scheduler.cof     ❌
+
+The file next to it is scheduler.conf. Correct the flag and save. Do not restart
+anything by hand: the kubelet notices the changed manifest and recreates the pod.
+
+   kubectl get pods -n kube-system -w
+   kubectl get pods -n k8squest -o wide
+
+Do not set nodeName on the Deployment: that bypasses the scheduler and the
+validator rejects it.

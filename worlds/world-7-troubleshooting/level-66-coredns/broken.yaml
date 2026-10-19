@@ -1,0 +1,62 @@
+# The workload: a Service, its backend and a client that resolves the Service by name.
+# The fault (CoreDNS scaled to 0 and its Corefile zone mistyped) is injected by setup.sh.
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: k8squest
+spec:
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: k8squest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: web
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-client
+  namespace: k8squest
+spec:
+  containers:
+  - name: client
+    image: busybox:1.37.0
+    command:
+    - sh
+    - -c
+    - |
+      while true; do
+        if nslookup web.k8squest.svc.cluster.local >/dev/null 2>&1; then
+          echo "$(date +%T) lookup web.k8squest.svc.cluster.local: OK"
+        else
+          echo "$(date +%T) lookup web.k8squest.svc.cluster.local: FAILED"
+        fi
+        sleep 5
+      done
+    resources:
+      requests:
+        cpu: 10m
+        memory: 8Mi

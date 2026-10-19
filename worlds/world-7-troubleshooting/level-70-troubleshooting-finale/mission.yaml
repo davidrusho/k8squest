@@ -1,0 +1,35 @@
+level: 70
+title: "FINALE: The Maintenance Window"
+name: "FINALE: The Maintenance Window"
+objective: "Take an etcd snapshot of the cluster, then take the lost worker out of service so the shop runs entirely on the remaining node"
+world: "Troubleshooting"
+difficulty: "expert"
+xp: 500
+expected_time: "25-40 minutes"
+concepts:
+  - etcd-snapshot
+  - etcdctl
+  - cordon-drain
+  - node-failure
+description: |
+  A maintenance window has just opened and the cluster is not in a good state.
+
+  Part 1 - Back up the data store first.
+    Save an etcd snapshot to /var/lib/etcd/k8squest-snapshot.db on the control-plane node,
+    then check it. etcd runs as a static pod and its image contains etcdctl and etcdutl;
+    the node itself has neither, so run them in the pod with kubectl exec.
+    The snapshot has to contain the cluster's current data, including the
+    maintenance-marker ConfigMap in the k8squest namespace.
+
+  Part 2 - The worker k8squest-multinode-worker has stopped reporting (its kubelet is
+    down, and it is not coming back during this window). The shop Deployment runs 4
+    replicas, some of them on that node. Mark the node unschedulable and move the
+    workload off it, so that all 4 shop pods are Running on the remaining worker. Be
+    careful what `kubectl drain` does when the node cannot answer.
+
+  Restoring a snapshot is not part of this level (it needs kubeadm VMs, in World 8).
+learning_objectives:
+  - Save an etcd snapshot with etcdctl (endpoint and TLS flags come from the etcd static pod manifest)
+  - Verify a snapshot with etcdutl snapshot status
+  - Cordon and drain a node, and know what happens to pods on a node that is down
+  - Tell terminating pods from replacement pods, and when a force delete is the tool

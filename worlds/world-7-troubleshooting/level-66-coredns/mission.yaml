@@ -1,0 +1,26 @@
+level: 66
+title: "Names That Stopped Resolving"
+name: "Names That Stopped Resolving"
+objective: "Restore in-cluster DNS so the dns-client pod can resolve the web Service"
+world: "Troubleshooting"
+difficulty: "advanced"
+xp: 300
+expected_time: "15-20 minutes"
+concepts:
+  - coredns
+  - dns
+  - corefile
+  - services
+description: |
+  The dns-client pod looks up the web Service by name every few seconds, and every
+  lookup fails. Applications in the cluster that use Service names are failing in the
+  same way.
+
+  The web Service and its pods are fine. Something in the cluster's DNS is wrong, and
+  there may be more than one thing. Find the DNS component, check that it runs, and
+  check that it is configured for the cluster's domain.
+learning_objectives:
+  - Test cluster DNS from inside a pod (kubectl exec ... nslookup)
+  - Find CoreDNS (the kube-dns Service, the coredns Deployment and ConfigMap in kube-system)
+  - Read a Corefile and recognise the kubernetes plugin's zone
+  - Tell a DNS timeout (nobody answering) from NXDOMAIN (answered, no such name)

@@ -1,0 +1,9 @@
+# Level 62 has no manifest fix: the workload is correct. The fix is on the node.
+#
+#   docker exec -it k8squest-multinode-worker2 bash
+#   systemctl status kubelet             # activating (auto-restart): it starts, exits, starts...
+#   journalctl -u kubelet --no-pager -n 20
+#     ... failed to run Kubelet: open /etc/kubernetes/pki/ca.crtt: no such file or directory
+#   ls /etc/kubernetes/pki/ca.crt        # the real file
+#   vi /var/lib/kubelet/config.yaml      # ✅ authentication.x509.clientCAFile: /etc/kubernetes/pki/ca.crt
+#   systemctl restart kubelet

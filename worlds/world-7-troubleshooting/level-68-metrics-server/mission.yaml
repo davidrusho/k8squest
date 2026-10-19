@@ -1,0 +1,25 @@
+level: 68
+title: "kubectl top Shows Nothing"
+name: "kubectl top Shows Nothing"
+objective: "Make kubectl top nodes and kubectl top pods work again by repairing metrics-server"
+world: "Troubleshooting"
+difficulty: "intermediate"
+xp: 250
+expected_time: "10-15 minutes"
+concepts:
+  - metrics-server
+  - kubectl-top
+  - apiservice
+  - resource-usage
+description: |
+  You want to see which pods use the most CPU and memory, and kubectl top answers
+  "error: Metrics API not available".
+
+  metrics-server is installed, but something about it is wrong. Find out which part of
+  the pipeline is broken (the APIService that kubectl top calls, the metrics-server
+  pod, or its connection to the kubelets) and fix it. You must not remove metrics-server.
+learning_objectives:
+  - Follow the resource metrics pipeline (kubelet -> metrics-server -> metrics.k8s.io APIService -> kubectl top)
+  - Read an APIService's Available condition
+  - Use the metrics-server pod's log to find why it cannot scrape the kubelets
+  - Fix a Deployment's container arguments

@@ -1,0 +1,15 @@
+🔍 HINT 1: Observing the Problem
+
+1️⃣ What does kubectl say?
+   kubectl get nodes
+
+   It cannot reach the API server, so every kubectl-based tool (get, describe, logs) is out.
+
+2️⃣ Is the node itself alive? A kind node is a container:
+   docker ps
+   docker exec -it k8squest-multinode-control-plane bash
+
+3️⃣ On the node, the container runtime still works without the API server:
+   crictl ps -a
+
+🤔 Question: is the kube-apiserver container running, restarting or missing?

@@ -1,0 +1,20 @@
+🔍 HINT 2: Snapshot, Then Verify
+
+   etcdctl --endpoints=https://127.0.0.1:2379 \
+     --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+     --cert=/etc/kubernetes/pki/etcd/server.crt \
+     --key=/etc/kubernetes/pki/etcd/server.key \
+     snapshot save /var/lib/etcd/k8squest-snapshot.db
+
+(run it with `kubectl -n kube-system exec etcd-<node> --` in front). Only /var/lib/etcd
+and the certificate directory are mounted from the node into the etcd pod, which is
+why the snapshot goes under /var/lib/etcd.
+
+Verify it with etcdutl (a restore tool that works on a file, with no server):
+   etcdutl snapshot status /var/lib/etcd/k8squest-snapshot.db -w table
+
+Part 2: the node's kubelet is down. Mark the node unschedulable, then evict what is on it:
+   kubectl cordon k8squest-multinode-worker
+   kubectl drain k8squest-multinode-worker --ignore-daemonsets --delete-emptydir-data --force --timeout=30s
+
+🤔 Question: drain waits for pods to terminate. Who confirms a pod has terminated?

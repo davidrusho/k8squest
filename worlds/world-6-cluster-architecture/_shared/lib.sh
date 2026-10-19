@@ -5,39 +5,24 @@
 # level-* directories. Source it from a level with:
 #   . "$(dirname "$0")/../_shared/lib.sh"
 #
+# log, need, retry, wait_available, require_game_context and ensure_metrics_server
+# (shared with World 7) live in worlds/_shared/lib.sh, which is sourced first.
+#
 # Every ensure_* function is idempotent: it returns at once when the component
 # is already installed, otherwise installs the pinned version and waits (with a
 # timeout) until it is ready. Versions are pinned here and nowhere else.
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../_shared/lib.sh"
+
 CERT_MANAGER_VERSION="v1.21.2"            # https://cert-manager.io/docs/installation/kubectl/
 GATEWAY_API_VERSION="v1.6.3"              # https://gateway-api.sigs.k8s.io/guides/getting-started/
 ENVOY_GATEWAY_VERSION="v1.9.2"            # https://gateway.envoyproxy.io/docs/install/install-helm/
-METRICS_SERVER_VERSION="v0.9.0"           # https://github.com/kubernetes-sigs/metrics-server
 VPA_VERSION="1.8.0"                       # https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler
-
-log() { echo "[setup] $*"; }
 
 # Label carried by every cluster-scoped object a World 6 level creates
 # (RuntimeClass, StorageClass, CRD, GatewayClass). Setup only ever deletes such
 # an object when it has this label AND the expected name.
 PART_OF="app.kubernetes.io/part-of=k8squest"
-
-# World 6 setup scripts create and delete cluster-scoped objects, so refuse to run
-# against any cluster except the game's own kind cluster. (The engine also accepts
-# k3s-k8squest for K8S_CLUSTER_TYPE=k3s; World 6 declares `cluster: kind` and is only
-# tested on kind, so it deliberately does not.)
-# Override (at your own risk): K8SQUEST_ALLOW_CONTEXT=1
-require_game_context() {
-    local ctx
-    ctx=$(kubectl config current-context 2>/dev/null || true)
-    if [ "$ctx" = "kind-k8squest" ] || [ "${K8SQUEST_ALLOW_CONTEXT:-}" = "1" ]; then
-        return 0
-    fi
-    echo "[setup] REFUSING to run: kubectl context is '${ctx:-none}', expected 'kind-k8squest'." >&2
-    echo "[setup] This level creates and deletes cluster-scoped objects. Run: kubectl config use-context kind-k8squest" >&2
-    echo "[setup] (or set K8SQUEST_ALLOW_CONTEXT=1 to override)" >&2
-    return 1
-}
 
 # delete_owned <kind> <name>
 # Delete a cluster-scoped object of this world, only if it carries $PART_OF.
@@ -146,26 +131,6 @@ delete_sa_bindings() {
     done
 }
 
-need() {
-    command -v "$1" >/dev/null 2>&1 || { echo "[setup] ERROR: '$1' is required but not installed" >&2; return 1; }
-}
-
-# retry <attempts> <sleep-seconds> <command...>
-retry() {
-    local n=$1 s=$2 i
-    shift 2
-    for ((i = 1; i <= n; i++)); do
-        "$@" && return 0
-        sleep "$s"
-    done
-    return 1
-}
-
-# wait_available <namespace> <timeout>   (all Deployments in the namespace)
-wait_available() {
-    kubectl wait --for=condition=Available deployment --all -n "$1" --timeout="$2" >/dev/null
-}
-
 ensure_cert_manager() {
     if kubectl get crd certificates.cert-manager.io >/dev/null 2>&1 \
         && kubectl wait --for=condition=Available deployment --all -n cert-manager --timeout=5s >/dev/null 2>&1; then
@@ -254,22 +219,6 @@ spec:
 YAML
     retry 30 3 bash -c "[ \"\$(kubectl get gateway web-gw -n k8squest -o jsonpath='{.status.conditions[?(@.type==\"Accepted\")].status}')\" = True ]" \
         || { echo "[setup] Gateway web-gw was not Accepted" >&2; return 1; }
-}
-
-ensure_metrics_server() {
-    if kubectl get apiservice v1beta1.metrics.k8s.io >/dev/null 2>&1 \
-        && kubectl wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=5s >/dev/null 2>&1; then
-        return 0
-    fi
-    log "installing metrics-server ${METRICS_SERVER_VERSION}"
-    retry 3 5 kubectl apply -f "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICS_SERVER_VERSION}/components.yaml" >/dev/null || return 1
-    # kind's kubelet serves a certificate the cluster CA did not sign
-    if ! kubectl get deployment metrics-server -n kube-system -o jsonpath='{.spec.template.spec.containers[0].args}' | grep -q kubelet-insecure-tls; then
-        kubectl patch deployment metrics-server -n kube-system --type=json \
-            -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]' >/dev/null || return 1
-    fi
-    kubectl rollout status deployment/metrics-server -n kube-system --timeout=180s >/dev/null || return 1
-    kubectl wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=180s >/dev/null
 }
 
 # Recommender-only install of the Vertical Pod Autoscaler. The levels use

@@ -4,7 +4,7 @@
 
 Welcome, contributor! This guide will help you create new K8sQuest challenges that are maintainable, consistent, and provide actual learning value.
 
-**K8sQuest has 60 levels across 6 worlds today, with Worlds 7-8 in progress.** We welcome:
+**K8sQuest has 70 levels across 7 worlds today, with World 8 in progress.** We welcome:
 - Bug fixes and improvements to existing levels
 - New bonus levels or alternative challenges
 - Translations and localization
@@ -56,7 +56,7 @@ learning_objectives:
 ```
 
 **Rules:**
-- `level`: Sequential number across all worlds (1-60 today)
+- `level`: Sequential number across all worlds (1-70 today)
 - `title`: Max 60 characters, clear and descriptive
 - `xp_reward`: 100 (beginner), 150-250 (intermediate), 300-350 (advanced), 500 (expert finale)
 - `difficulty`: beginner | intermediate | advanced | expert
@@ -346,7 +346,18 @@ Rules:
 - Level directory names (`level-N-name`) must be unique across **all** worlds; discovery refuses to start otherwise. Level numbering continues across worlds (World 6 starts after the last level of World 5).
 - `mission.yaml` `xp` values are summed for the total XP; don't hard-code totals anywhere.
 - `utils/test-all-levels.sh` and `tests/test_discovery.py` check `world.yaml` and the 8 mandatory files for every level.
+- A directory under `worlds/` whose name starts with `_` (`worlds/_shared`) holds helpers shared by several worlds. It has no `world.yaml`, so discovery ignores it, and the checks above skip it.
 - `tools/create_level.sh <world-order> ...` looks up the world by its `order`.
+
+### Multi-node worlds, `heal.sh` and `solution.sh`
+
+- **Which cluster.** `cluster: kind` runs on the `k8squest` cluster (context `kind-k8squest`); `cluster: kind-multinode` runs on `k8squest-multinode` (1 control plane + 2 workers from `kind/multinode.yaml`, context `kind-k8squest-multinode`). The mapping lives in one place, `engine/level_reset.py` (`context_for`). Before a level starts the engine creates the multi-node cluster if it is missing (`kind create cluster --name k8squest-multinode --config kind/multinode.yaml --wait 180s`) and switches `kubectl` to the world's context; `./install.sh --multinode` creates it ahead of time. Nodes are Docker containers named `k8squest-multinode-control-plane`, `-worker` and `-worker2`.
+- **Context in scripts.** The engine and the harness set `K8SQUEST_CONTEXT` for `setup.sh` and `validate.sh`. `require_game_context` (in `worlds/_shared/lib.sh`) refuses to run unless the current context is that one (default `kind-k8squest`).
+- **Healthy baseline.** A level that breaks the cluster itself (nodes, control-plane manifests, DNS, CNI) must not leave the next level broken. World 7's `setup.sh` scripts call `heal_cluster` before they inject their fault, and `worlds/world-7-troubleshooting/heal.sh` runs the same function before the engine's own reset (the reset needs a working API server). Keep a pristine copy of every node file you edit under `/root/k8squest-pristine/` on the node, taken once from the healthy cluster, and restore from it.
+- **`solution.sh`.** When the fix is a node-side or command action that `kubectl apply -f solution.yaml` cannot express, add an executable `solution.sh` next to `solution.yaml`. `tests/level_harness.py` runs it (cwd = the level directory, same environment as `setup.sh`) instead of applying `solution.yaml`. The engine never runs it and the player never sees it. `solution.yaml` stays the player-facing reference and may contain only comments. A level with neither an applicable `solution.yaml` nor a `solution.sh` is reported `MANUAL` by the harness.
+- **Host limits.** Two kind clusters at once (`k8squest` with 1 node and `k8squest-multinode` with 3) need `fs.inotify.max_user_instances` >= 512 on Linux; at the default of 128 `kube-proxy` and other pods fail with `fsnotify watcher init: too many open files` ([kind known issue](https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files)). `ensure_world_cluster` checks this (`inotify_preflight` in `engine/level_reset.py`, file `INOTIFY_LIMIT_FILE`, skipped when the file is missing) before it creates the multinode cluster and refuses with the sysctl commands. The harness exits non-zero when any level is SKIPPED.
+- **Reaching a node.** Use `docker exec -it <node> bash`, so the world declares `requires: [docker]`. kind nodes have `systemctl`, `journalctl` and `crictl`, but not `etcdctl`; run it with `kubectl -n kube-system exec etcd-<control-plane-node> -- etcdctl ...`.
+- **A fault the API server cannot see.** `validate.sh` of a level that takes the API server down must use `kubectl --request-timeout=...` and bounded retries, and fail with a message instead of hanging.
 
 ## 🚫 What NOT to Do
 
@@ -356,12 +367,12 @@ Rules:
 
 ❌ **Don't use a tool its world doesn't declare**
 - A level may only use host tools listed in its world's `world.yaml` `requires`
-- `kubectl` is always available and never needs listing; Worlds 1-5 declare `requires: []`, so their levels are kubectl-only; World 6 declares `requires: [helm]` (Kustomize needs no extra tool: it is built into `kubectl kustomize` and `kubectl apply -k`)
+- `kubectl` is always available and never needs listing; Worlds 1-5 declare `requires: []`, so their levels are kubectl-only; World 6 declares `requires: [helm]`; World 7 declares `requires: [docker]` (Kustomize needs no extra tool: it is built into `kubectl kustomize` and `kubectl apply -k`)
 - If a level needs `helm`, `kustomize`, `limactl` or similar, add it to the world's `requires` first, so the tool list for each world is visible in one place
 - The engine does not yet check that declared tools are installed; `requires` is the contract contributors and reviewers hold levels to
-- World 6 levels that need cluster-wide prerequisites (cert-manager, Gateway API + Envoy Gateway, metrics-server, the VPA recommender) install them from `worlds/world-6-cluster-architecture/_shared/lib.sh`, which pins every version in one place. Each `ensure_*` helper is idempotent and waits for readiness. A level with a `setup.sh` must apply `broken.yaml` itself, because the engine skips it when `setup.sh` exists. `tests/level_harness.py` proves the break/fix cycle against a kind cluster. These installers are pinned by release tag, not by image or manifest digest, and no checksums are verified.
+- World 6 levels that need cluster-wide prerequisites (cert-manager, Gateway API + Envoy Gateway, metrics-server, the VPA recommender) install them from `worlds/world-6-cluster-architecture/_shared/lib.sh`, which pins every version in one place (metrics-server lives in `worlds/_shared/lib.sh`, shared with World 7). Each `ensure_*` helper is idempotent and waits for readiness. A level with a `setup.sh` must apply `broken.yaml` itself, because the engine skips it when `setup.sh` exists. `tests/level_harness.py` proves the break/fix cycle against a kind cluster. These installers are pinned by release tag, not by image or manifest digest, and no checksums are verified.
 - Every engine level start also runs `engine/level_reset.py`'s `clear_leftovers`: after `kubectl delete all` it removes quotas, limit ranges, network policies, roles, role bindings, service accounts (except `default`), config maps (except `kube-root-ca.crt`), secrets and PVCs from the namespace, and the `dedicated` taint and `accelerator` label from nodes. A level must therefore create everything it relies on itself (in `broken.yaml` or `setup.sh`) rather than inherit it from an earlier level.
-- World 6 `setup.sh` scripts call `require_game_context` (refuses unless the kubectl context is `kind-k8squest`; override with `K8SQUEST_ALLOW_CONTEXT=1`), label cluster-scoped objects they create with `app.kubernetes.io/part-of=k8squest`, and delete such objects only when the label and name both match. Delete policy: cluster-scoped objects the game owns are deleted only by label plus name. The documented exceptions are exact-name deletes, all of which run only behind `require_game_context`: ClusterIssuer `selfsigned-issuer` (level 54), namespace `k8squest-backend` (level 56), and RoleBindings / ClusterRoleBindings that name a level's ServiceAccount (levels 58 and 60). A ClusterRoleBinding that names other subjects besides the game ServiceAccount is skipped and reported, never deleted. The engine-side reset (`clear_leftovers`) keeps the install-time player RBAC (`k8squest-player` ServiceAccount, `k8squest-player-role`, `k8squest-player-binding`), reports any step that failed (the engine prints a yellow warning and carries on; the harness appends it to the level's note), and only edits node taints and labels when the kubectl context is `kind-k8squest` or `k3s-k8squest` (or `K8SQUEST_ALLOW_CONTEXT=1`). Files a player edits (levels 51-53) are copied to `${K8SQUEST_WORKDIR:-$HOME/.k8squest/work}/<level-name>/` on every start.
+- World 6 `setup.sh` scripts call `require_game_context` (refuses unless the kubectl context is the world's own, `kind-k8squest` unless `K8SQUEST_CONTEXT` says otherwise; override with `K8SQUEST_ALLOW_CONTEXT=1`), label cluster-scoped objects they create with `app.kubernetes.io/part-of=k8squest`, and delete such objects only when the label and name both match. Delete policy: cluster-scoped objects the game owns are deleted only by label plus name. The documented exceptions are exact-name deletes, all of which run only behind `require_game_context`: ClusterIssuer `selfsigned-issuer` (level 54), namespace `k8squest-backend` (level 56), and RoleBindings / ClusterRoleBindings that name a level's ServiceAccount (levels 58 and 60). A ClusterRoleBinding that names other subjects besides the game ServiceAccount is skipped and reported, never deleted. The engine-side reset (`clear_leftovers`) keeps the install-time player RBAC (`k8squest-player` ServiceAccount, `k8squest-player-role`, `k8squest-player-binding`), reports any step that failed (the engine prints a yellow warning and carries on; the harness appends it to the level's note), and only edits node taints and labels when the kubectl context is `kind-k8squest`, `k3s-k8squest` or `kind-k8squest-multinode` (or `K8SQUEST_ALLOW_CONTEXT=1`). Files a player edits (levels 51-53) are copied to `${K8SQUEST_WORKDIR:-$HOME/.k8squest/work}/<level-name>/` on every start.
 
 ❌ **Don't use real secrets/credentials**
 - Use obviously fake values: `password123`, `fake-token`

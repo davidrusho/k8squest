@@ -1,0 +1,27 @@
+level: 62
+title: "The Kubelet That Keeps Dying"
+name: "The Kubelet That Keeps Dying"
+objective: "Find out why the kubelet on worker2 will not stay up, fix its configuration and bring the node back"
+world: "Troubleshooting"
+difficulty: "advanced"
+xp: 300
+expected_time: "15-20 minutes"
+concepts:
+  - kubelet
+  - kubelet-config
+  - journalctl
+  - node-notready
+description: |
+  The node k8squest-multinode-worker2 is NotReady and the reports Deployment, which
+  is pinned to it, has Pending pods.
+
+  This time systemd keeps trying to run the kubelet, and it keeps exiting. Somebody
+  edited the kubelet's configuration file on the node. Read the kubelet's own log to
+  find out what it is unhappy about, fix the file in place and restart the service.
+
+    docker exec -it k8squest-multinode-worker2 bash
+learning_objectives:
+  - Tell a stopped service from one that keeps exiting (systemctl status, "activating (auto-restart)")
+  - Read the reason from journalctl -u kubelet
+  - Know where the kubelet reads its configuration from (--config, /var/lib/kubelet/config.yaml)
+  - Restart the kubelet after changing its configuration

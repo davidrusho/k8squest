@@ -1,0 +1,8 @@
+# Level 65 has no manifest fix. kubectl is down; the fix is a static pod manifest on the control-plane node.
+#
+#   docker exec -it k8squest-multinode-control-plane bash
+#   crictl ps -a --name kube-apiserver                   # Running, but never ready
+#   crictl logs $(crictl ps -a --name kube-apiserver -q | head -1) 2>&1 | tail
+#     ... grpc: addrConn.createTransport failed to connect to {Addr: "127.0.0.1:2397" ...
+#   grep -n -E 'etcd-servers|listen-client-urls' /etc/kubernetes/manifests/kube-apiserver.yaml /etc/kubernetes/manifests/etcd.yaml
+#   vi /etc/kubernetes/manifests/kube-apiserver.yaml     # ✅ --etcd-servers=https://127.0.0.1:2379

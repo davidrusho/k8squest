@@ -1,0 +1,16 @@
+🔍 HINT 2: Follow the CNI
+
+The message is "cni plugin not initialized". On kind, the CNI plugin (kindnet) runs
+as a DaemonSet in kube-system and writes each node's CNI configuration when its pod
+starts.
+
+   kubectl get ds -n kube-system
+   kubectl get pods -n kube-system -l app=kindnet -o wide
+
+Compare DESIRED with the number of nodes, and look for the node that has no kindnet pod.
+Then ask why the DaemonSet skips it:
+
+   kubectl get ds kindnet -n kube-system -o yaml      # spec.template.spec.nodeSelector
+   kubectl get nodes --show-labels
+
+🤔 Question: what does the DaemonSet require of a node, and does worker2 have it?

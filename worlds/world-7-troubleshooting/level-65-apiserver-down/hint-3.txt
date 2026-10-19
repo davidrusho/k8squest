@@ -1,0 +1,13 @@
+🔍 HINT 3: The Fix
+
+etcd listens on https://127.0.0.1:2379. The API server's static pod manifest says:
+
+   --etcd-servers=https://127.0.0.1:2397      ❌ digits swapped
+
+Edit /etc/kubernetes/manifests/kube-apiserver.yaml on the control-plane node and
+fix the port. The kubelet notices the file change and restarts the pod. It takes
+20-40 seconds. Watch it with:
+
+   crictl ps
+   exit
+   kubectl get nodes

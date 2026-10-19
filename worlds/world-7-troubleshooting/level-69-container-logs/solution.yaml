@@ -1,0 +1,16 @@
+# Level 69: fix the ConfigMap key, then restart the pods.
+#
+#   kubectl get pods -n k8squest                                    # 1/2 or 2/2 with RESTARTS climbing
+#   kubectl logs deploy/invoice-api -n k8squest                     # shows log-shipper ("Defaulted container ..."): healthy
+#   kubectl logs deploy/invoice-api -n k8squest -c invoice-api --previous
+#     FATAL: DB_HOST is not set; refusing to start without a database
+#   kubectl get deploy invoice-api -n k8squest -o yaml              # envFrom -> ConfigMap invoice-config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: invoice-config
+  namespace: k8squest
+data:
+  LOG_LEVEL: info
+  DB_HOST: db.internal        # ✅ the key the application reads
+# then: kubectl rollout restart deployment/invoice-api -n k8squest
