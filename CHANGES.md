@@ -10,21 +10,21 @@ are unchanged from upstream.
 
 ### Added
 
-- `engine/world_discovery.py` - discovers worlds from `worlds/*/world.yaml`, sorted by `order`; computes level and XP totals from the `mission.yaml` files; rejects duplicate level names, duplicate world orders and invalid `world.yaml` files; `find_world(order)` looks a world up by its `order`.
+- `engine/world_discovery.py` - discovers worlds from `worlds/*/world.yaml`, sorted by `order`; computes level and XP totals from the `mission.yaml` files; rejects duplicate level names, duplicate world orders and invalid `world.yaml` files; `find_world(order)` looks a world up by its `order`; a level without a valid `mission.yaml` (a mapping with an integer `xp`) is an error; `milestones_for` decides which milestones to celebrate.
 - `worlds/world-1-basics/world.yaml`, `worlds/world-2-deployments/world.yaml`, `worlds/world-3-networking/world.yaml`, `worlds/world-4-storage/world.yaml`, `worlds/world-5-security/world.yaml` - world metadata (`order`, `title`, `description`, `cluster`, `requires`).
 - `worlds/world-2-deployments/level-14-hpa/solution.yaml` - the level previously had only `SOLUTION.md`; the new file carries the same commands so the level has the 8 mandatory files.
 - `kind/cluster.yaml` - kind cluster configuration pinning the node image to Kubernetes v1.37.0.
-- `tests/test_discovery.py` - tests for world discovery, level and XP totals, unique level names, mandatory files and `world.yaml` validity.
+- `tests/test_discovery.py` - tests for world discovery, level and XP totals, unique level names, mandatory files, `world.yaml` and `mission.yaml` validity, and milestone selection.
 - `CHANGES.md` - this file.
 
 ### Modified
 
-- `engine/engine.py` - world list, level count and XP total come from discovery instead of hard-coded values.
+- `engine/engine.py` - world list, level count and XP total come from discovery instead of hard-coded values; milestones are decided by `milestones_for` (per-world and total-aware, and only when a level is newly completed).
 - `engine/retro_ui.py` - XP bar maximum and "all levels" message take their numbers from the caller; worlds without a hand-drawn banner get one built from the `title` and `description` in `world.yaml`.
 - `engine/certificate.py` - worlds without a hand-written entry take their name, level count and skills from `world.yaml` and the level missions; the "Next:" line comes from the next world by `order`.
 - `engine/start_game.sh` - plays the lowest-`order` world found in `world.yaml` files, in numeric level order, instead of a hard-coded World 1 path.
 - `tools/progress_tracker.py` - uses the engine's world discovery and reads the `completed_levels` key the engine writes.
-- `tools/create_level.sh` - looks up the world by `order` in `world.yaml`, refuses duplicate level names, and creates `solution.yaml`.
+- `tools/create_level.sh` - looks up the world by `order` using the engine's world discovery, refuses duplicate level names, and creates `solution.yaml`.
 - `utils/test-all-levels.sh` - checks every level in every world, plus `world.yaml` validity and the 8 mandatory files.
 - `utils/audit_levels.sh` - derives the level count from disk.
 - `install.sh` - creates the cluster from `kind/cluster.yaml` and warns when kind is older than v0.33.0.
@@ -37,3 +37,5 @@ are unchanged from upstream.
 - `docs/50-CHALLENGE-BLUEPRINT.md` - added a note that the blueprint is historical and that totals are computed from `mission.yaml` files.
 - `docs/contributing.md` - documented the `world.yaml` schema; a level may only use tools its world declares in `requires`; the world list now points at `world.yaml`; updated the status line.
 - `README.md` - describes 5 worlds today with Worlds 6-8 in progress; per-world XP and the World 1 level list match the mission files.
+
+Each modified source or script file listed above (`engine/*.py`, `engine/start_game.sh`, `tools/*`, `utils/*`, `install.sh`, `Dockerfile`) carries a "Modified 2026 by David Rusho; see CHANGES.md" comment near the top.

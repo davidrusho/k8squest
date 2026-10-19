@@ -20,6 +20,7 @@ from engine.world_discovery import (
     VALID_CLUSTERS,
     WorldDiscoveryError,
     discover_worlds,
+    milestones_for,
     total_levels,
     total_xp,
 )
@@ -104,16 +105,18 @@ def check_world_yaml_clusters():
     return None
 
 
-def _write_world(root, dir_name, order, cluster, level_names):
+def _write_world(root, dir_name, order, cluster, level_names,
+                 mission_text="name: x\nxp: 10\n", world_text=None):
+    """Write a tiny world. mission_text=None writes no mission.yaml at all."""
     world = root / "worlds" / dir_name
     world.mkdir(parents=True)
-    (world / "world.yaml").write_text(
-        f'order: {order}\ntitle: "T"\ndescription: "D"\ncluster: {cluster}\nrequires: []\n',
-        encoding="utf-8",
-    )
+    if world_text is None:
+        world_text = f'order: {order}\ntitle: "T"\ndescription: "D"\ncluster: {cluster}\nrequires: []\n'
+    (world / "world.yaml").write_text(world_text, encoding="utf-8")
     for name in level_names:
         (world / name).mkdir()
-        (world / name / "mission.yaml").write_text("name: x\nxp: 10\n", encoding="utf-8")
+        if mission_text is not None:
+            (world / name / "mission.yaml").write_text(mission_text, encoding="utf-8")
 
 
 def _rejects(build):
@@ -154,6 +157,105 @@ def check_discovery_rejects_bad_trees():
     return None
 
 
+def _bad_mission_cases():
+    """(label, mission.yaml text or None) pairs discovery must reject"""
+    return [
+        ("string xp", 'name: x\nxp: "100"\n'),
+        ("float xp", "name: x\nxp: 1.5\n"),
+        ("bool xp", "name: x\nxp: true\n"),
+        ("missing xp", "name: x\n"),
+        ("missing mission.yaml", None),
+        ("malformed mission.yaml", "name: [unclosed\nxp: 10\n"),
+        ("non-mapping mission.yaml", "- just\n- a list\n"),
+        ("empty mission.yaml", ""),
+    ]
+
+
+def check_discovery_rejects_bad_missions():
+    problems = []
+    for label, text in _bad_mission_cases():
+        def build(root, text=text):
+            _write_world(root, "world-a", 1, "kind", ["level-1-a"], mission_text=text)
+        try:
+            if not _rejects(build):
+                problems.append(f"{label}: accepted")
+        except Exception as e:
+            problems.append(f"{label}: raised {type(e).__name__} instead of WorldDiscoveryError")
+    if problems:
+        return "; ".join(problems)
+    return None
+
+
+def check_discovery_rejects_malformed_world_yaml():
+    def build(root):
+        _write_world(root, "world-a", 1, "kind", ["level-1-a"], world_text="order: [unclosed\n")
+    try:
+        if not _rejects(build):
+            return "accepted a malformed world.yaml"
+    except Exception as e:
+        return f"raised {type(e).__name__} instead of WorldDiscoveryError"
+    return None
+
+
+def _simulate(total, per_world=10):
+    """Complete `total` levels in order across worlds of `per_world`; return [(count, milestones)]"""
+    names = [f"level-{i}-x" for i in range(1, total + 1)]
+    world_levels = [names[i:i + per_world] for i in range(0, total, per_world)]
+    completed = set()
+    events = []
+    for name in names:
+        completed.add(name)
+        got = milestones_for(world_levels, completed, name, True)
+        events.append((len(completed), got))
+    return world_levels, names, events
+
+
+def check_milestones_across_totals():
+    problems = []
+    for total in (1, 2, 3, 10, 11, 20, 50, 60, 76):
+        world_levels, names, events = _simulate(total)
+        fired = {}
+        for count, got in events:
+            for m in got:
+                fired.setdefault(m, []).append(count)
+        expect_once = ["game_complete"] + (["final_boss"] if total >= 2 else []) + (["halfway"] if total >= 3 else [])
+        for m in expect_once:
+            if len(fired.get(m, [])) != 1:
+                problems.append(f"T={total}: {m} fired at {fired.get(m, [])}")
+        if total < 3 and fired.get("halfway"):
+            problems.append(f"T={total}: halfway fired at {fired['halfway']} (cannot be distinct)")
+        if total < 2 and fired.get("final_boss"):
+            problems.append(f"T={total}: final_boss fired at {fired['final_boss']} (cannot be distinct)")
+        if fired.get("game_complete") and fired["game_complete"] != [total]:
+            problems.append(f"T={total}: game_complete at {fired['game_complete']}")
+        if total >= 3:
+            counts = [fired[m][0] for m in ("halfway", "final_boss", "game_complete") if fired.get(m)]
+            if len(set(counts)) != len(counts):
+                problems.append(f"T={total}: milestone counts collide {counts}")
+        # world_complete: once per world except the last (game_complete covers that)
+        want = len(world_levels) - 1
+        got_wc = fired.get("world_complete", [])
+        if len(got_wc) != want:
+            problems.append(f"T={total}: world_complete fired {len(got_wc)}x, expected {want}")
+        else:
+            ends = [sum(len(w) for w in world_levels[:i + 1]) for i in range(want)]
+            if got_wc != ends:
+                problems.append(f"T={total}: world_complete at {got_wc}, world ends {ends}")
+    if problems:
+        return "; ".join(problems)
+    return None
+
+
+def check_milestones_not_on_replay():
+    world_levels, names, _ = _simulate(20)
+    completed = set(names)
+    for name in names:
+        got = milestones_for(world_levels, completed, name, False)
+        if got:
+            return f"replaying {name} fired {got}"
+    return None
+
+
 def test_discovery():
     """Test world discovery against the worlds/ tree"""
 
@@ -166,6 +268,10 @@ def test_discovery():
         (check_mandatory_files, "Every level has the 8 mandatory files"),
         (check_world_yaml_clusters, "Every world has a world.yaml with a valid cluster"),
         (check_discovery_rejects_bad_trees, "Discovery rejects duplicate names, bad cluster, duplicate order"),
+        (check_discovery_rejects_bad_missions, "Discovery rejects non-int/bool/missing xp, missing/malformed/non-mapping mission.yaml"),
+        (check_discovery_rejects_malformed_world_yaml, "Discovery rejects a malformed world.yaml"),
+        (check_milestones_across_totals, "Milestones fire once each and never collide for T = 1, 2, 3, 10, 11, 20, 50, 60, 76"),
+        (check_milestones_not_on_replay, "Replaying a completed level fires no milestone"),
     ]
 
     passed = 0

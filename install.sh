@@ -1,4 +1,5 @@
 #!/bin/bash
+# Modified 2026 by David Rusho; see CHANGES.md
 set -e
 
 echo "🎮 K8sQuest Installation"

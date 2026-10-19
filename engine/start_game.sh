@@ -1,4 +1,5 @@
 #!/bin/bash
+# Modified 2026 by David Rusho; see CHANGES.md
 set -e
 
 # First world = the world.yaml with the lowest `order`

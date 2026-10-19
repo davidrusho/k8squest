@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Modified 2026 by David Rusho; see CHANGES.md
 """
 K8sQuest Progress Tracker
 Displays completion status of every level found under worlds/

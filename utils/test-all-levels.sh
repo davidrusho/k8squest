@@ -1,4 +1,5 @@
 #!/bin/bash
+# Modified 2026 by David Rusho; see CHANGES.md
 # Test script for all K8sQuest levels
 # Walks every world under worlds/ and validates world.yaml and that every level
 # has the 8 mandatory files (docs/contributing.md) and valid mission metadata.

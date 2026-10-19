@@ -1,4 +1,5 @@
 #!/bin/bash
+# Modified 2026 by David Rusho; see CHANGES.md
 
 # Audit every level under worlds/ for validation and namespace issues
 

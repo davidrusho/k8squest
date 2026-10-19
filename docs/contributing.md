@@ -426,7 +426,7 @@ Before submitting a new level, verify:
 ```bash
 # Make sure you have a clean cluster
 kind delete cluster --name k8squest
-kind create cluster --name k8squest
+kind create cluster --name k8squest --config kind/cluster.yaml
 
 # Create k8squest namespace
 kubectl create namespace k8squest

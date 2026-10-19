@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Modified 2026 by David Rusho; see CHANGES.md
 """
 K8sQuest - Interactive Kubernetes Learning Game
 🎮 Now with Retro Gaming UI! 🎮
@@ -31,7 +32,7 @@ else:  # Unix/Linux/Mac
     import tty
     import termios
 
-from world_discovery import discover_worlds, total_levels, total_xp
+from world_discovery import discover_worlds, milestones_for, total_levels, total_xp
 
 # Import retro UI components
 try:
@@ -1204,7 +1205,10 @@ Look for "2/2" ready replicas!
                         xp_earned = mission["xp"]
                         self.progress["total_xp"] += xp_earned
 
-                    if level_name not in self.progress["completed_levels"]:
+                    newly_completed = (
+                        level_name not in self.progress["completed_levels"]
+                    )
+                    if newly_completed:
                         self.progress["completed_levels"].append(level_name)
                     self.save_progress()
 
@@ -1216,15 +1220,16 @@ Look for "2/2" ready replicas!
 
                     # Check for milestones
                     if RETRO_UI_ENABLED:
-                        completed_count = len(self.progress["completed_levels"])
-                        if completed_count == 10:
-                            celebrate_milestone("world_complete")
-                        elif completed_count == self.total_levels // 2:
-                            celebrate_milestone("halfway")
-                        elif completed_count == self.total_levels - 1:
-                            celebrate_milestone("final_boss")
-                        elif completed_count == self.total_levels:
-                            show_game_complete(self.total_levels)
+                        for milestone in milestones_for(
+                            [[lv.name for lv in w.levels] for w in self.worlds],
+                            set(self.progress["completed_levels"]),
+                            level_name,
+                            newly_completed,
+                        ):
+                            if milestone == "game_complete":
+                                show_game_complete(self.total_levels)
+                            else:
+                                celebrate_milestone(milestone)
 
                     # Show debrief - THE LEARNING MOMENT!
                     self.show_debrief(level_path)

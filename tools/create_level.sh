@@ -1,4 +1,5 @@
 #!/bin/bash
+# Modified 2026 by David Rusho; see CHANGES.md
 # K8sQuest - Quick Level Creation Script
 # Usage: ./create_level.sh <world-number> <level-number> <level-name> <short-description>
 
@@ -15,20 +16,31 @@ LEVEL_NUM=$2
 LEVEL_NAME=$3
 DESCRIPTION=$4
 
-# Determine world directory name from worlds/*/world.yaml (`order: N`)
-WORLD_DIR=""
-for world_yaml in worlds/*/world.yaml; do
-    if grep -qx "order: $WORLD_NUM" "$world_yaml"; then
-        WORLD_DIR=$(basename "$(dirname "$world_yaml")")
-        break
-    fi
-done
+# Determine world directory name with the engine's own world discovery, so the
+# `order` lookup parses world.yaml exactly as the game does.
+PYTHON=python3
+[ -x venv/bin/python ] && PYTHON=venv/bin/python
+WORLD_DIR=$("$PYTHON" - "$WORLD_NUM" <<'PYEOF'
+import sys
+sys.path.insert(0, "engine")
+from world_discovery import WorldDiscoveryError, discover_worlds
 
-if [ -z "$WORLD_DIR" ]; then
-    echo "No world with 'order: $WORLD_NUM' found. Known worlds:"
-    grep -H "^order:" worlds/*/world.yaml
-    exit 1
-fi
+try:
+    worlds = discover_worlds()
+    order = int(sys.argv[1])
+except (WorldDiscoveryError, ValueError) as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(2)
+for world in worlds:
+    if world.order == order:
+        print(world.dir_name)
+        sys.exit(0)
+print(f"No world with order {order}. Known worlds:", file=sys.stderr)
+for world in worlds:
+    print(f"  {world.order}: {world.dir_name}", file=sys.stderr)
+sys.exit(1)
+PYEOF
+) || exit 1
 
 LEVEL_DIR="worlds/$WORLD_DIR/level-$LEVEL_NUM-$LEVEL_NAME"
 

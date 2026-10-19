@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Modified 2026 by David Rusho; see CHANGES.md
 """
 World Completion Certificate Generator
 Generates achievement certificates for completing K8sQuest worlds
@@ -126,7 +127,7 @@ def save_certificate(world_num, certificate):
 def main():
     if len(sys.argv) < 4:
         print("Usage: python3 certificate.py <world_num> <player_name> <total_xp>")
-        print("Example: python3 certificate.py 1 'Jane Doe' 1450")
+        print("Example: python3 certificate.py 1 'Jane Doe' 1500")
         sys.exit(1)
     
     world_num = int(sys.argv[1])

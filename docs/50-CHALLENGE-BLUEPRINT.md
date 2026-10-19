@@ -385,6 +385,8 @@ Apply security, RBAC, resource management, and handle complex multi-failure scen
 
 **Final Achievement**: All 50 levels = 10,200 XP = Kubernetes Master Certification! 🎓
 
+> Historical wording from the original plan. K8sQuest awards no certification, and the game computes its XP total from the `mission.yaml` files (currently 11,600).
+
 ---
 
 ## 🚀 Usage Guide

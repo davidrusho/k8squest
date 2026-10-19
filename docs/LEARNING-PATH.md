@@ -1,6 +1,6 @@
 # 🗺️ K8sQuest Learning Path
 
-> **Your journey from Kubernetes beginner to production-ready engineer**
+> **A hands-on, break-and-fix path through Kubernetes troubleshooting**
 
 ## 📊 Complete Skill Tree
 
@@ -8,7 +8,7 @@
 K8sQuest Learning Path
 │
 ├─ WORLD 1: Core Kubernetes Basics ⭐
-│  │  Difficulty: Beginner | Time: 3-5 hours | XP: 1,450
+│  │  Difficulty: Beginner | Time: 3-5 hours | XP: 1,500
 │  │  
 │  ├─ Level 1: CrashLoopBackOff (150 XP) ★ START HERE
 │  │  Prerequisites: None
@@ -53,7 +53,7 @@ K8sQuest Learning Path
 │     🏆 WORLD 1 COMPLETE! You can now debug basic Kubernetes issues!
 │
 ├─ WORLD 2: Deployments & Scaling ⭐⭐
-│  │  Difficulty: Intermediate | Time: 4-6 hours | XP: 2,000
+│  │  Difficulty: Intermediate | Time: 4-6 hours | XP: 2,050
 │  │  Prerequisites: Complete World 1 (Levels 1-10)
 │  │  
 │  ├─ Level 11: Deployment Rollback (200 XP)
@@ -99,37 +99,38 @@ K8sQuest Learning Path
 │     🏆 WORLD 2 COMPLETE! You can now manage production deployments!
 │
 ├─ WORLD 3: Networking & Services ⭐⭐
-│  │  Difficulty: Intermediate | Time: 4-6 hours | XP: ~2,000
+│  │  Difficulty: Intermediate | Time: 4-6 hours | XP: 2,300
 │  │  Prerequisites: Complete World 2 (Levels 1-20)
 │  │  
-│  └─ Planned Topics:
-│     • Service types (ClusterIP, NodePort, LoadBalancer)
-│     • Ingress controllers
-│     • Network policies
-│     • DNS debugging
-│     • Service mesh basics
+│  └─ Topics (Levels 21-30):
+│     • Service selectors, NodePort, LoadBalancer, headless Services
+│     • Ingress paths
+│     • NetworkPolicy
+│     • DNS debugging, cross-namespace communication
+│     • Endpoints and session affinity
 │
 ├─ WORLD 4: Storage & StatefulSets ⭐⭐⭐
-│  │  Difficulty: Advanced | Time: 5-7 hours | XP: ~2,500
+│  │  Difficulty: Advanced | Time: 5-7 hours | XP: 2,450
 │  │  Prerequisites: Complete World 3
 │  │  
-│  └─ Planned Topics:
-│     • PersistentVolumes and claims
-│     • Storage classes
-│     • StatefulSet deep dive
-│     • Volume snapshots
-│     • Data migration
+│  └─ Topics (Levels 31-40):
+│     • PersistentVolumeClaims, access modes, reclaim policies
+│     • StorageClasses
+│     • StatefulSet volume templates
+│     • Volume mounts, permissions, emptyDir vs PVC
+│     • ConfigMap keys and Secret encoding
 │
 └─ WORLD 5: Security & RBAC ⭐⭐⭐
-   │  Difficulty: Advanced | Time: 5-7 hours | XP: ~2,500
+   │  Difficulty: Advanced | Time: 5-7 hours | XP: 3,300
    │  Prerequisites: Complete World 4
    │  
-   └─ Planned Topics:
-      • RBAC troubleshooting
-      • Service accounts
-      • Pod security policies
-      • Network policies
-      • Secret management
+   └─ Topics (Levels 41-50):
+      • RBAC permissions
+      • SecurityContext and Pod Security Standards
+      • ResourceQuota and PriorityClass
+      • NetworkPolicy
+      • Node affinity, taints and tolerations, PodDisruptionBudgets
+      • Level 50: a multi-failure chaos finale
 ```
 
 ---

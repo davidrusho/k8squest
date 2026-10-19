@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Modified 2026 by David Rusho; see CHANGES.md
 """
 K8sQuest Retro Gaming UI - Contra/Mario Style
 ASCII art, animations, and classic arcade aesthetics
