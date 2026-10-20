@@ -6,7 +6,7 @@ This document provides the complete reference for all 50 K8sQuest challenges acr
 **Total Levels**: 50 
 **Total XP**: 10,200  
 
-> This blueprint is historical: it records the original plan, and the XP figures below are the planned values. The game computes level and XP totals from the `mission.yaml` files on disk, and currently sums to 11,600 XP.
+> This blueprint is historical: it records the original plan, and the XP figures below are the planned values. The game computes level and XP totals from the `mission.yaml` files on disk, and currently sums to 20,050 XP across 76 levels (11,600 XP for the first 50).
 
 
 ## ✅ WORLD 1: CORE KUBERNETES BASICS (Levels 1-10) 
@@ -385,7 +385,7 @@ Apply security, RBAC, resource management, and handle complex multi-failure scen
 
 **Final Achievement**: All 50 levels = 10,200 XP = Kubernetes Master Certification! 🎓
 
-> Historical wording from the original plan. K8sQuest awards no certification, and the game computes its XP total from the `mission.yaml` files (currently 11,600).
+> Historical wording from the original plan. K8sQuest awards no certification, and the game computes its XP total from the `mission.yaml` files (currently 20,050 across 76 levels).
 
 ---
 

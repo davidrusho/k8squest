@@ -13,7 +13,7 @@ The terminal UI now features classic gaming aesthetics inspired by Contra and Su
 - **Level Start**: "MISSION READY PLAYER ONE!" banners
 - **Victory Screen**: Massive "VICTORY!" ASCII art with celebration
 - **Game Over**: Classic "GAME OVER" screen (if you quit)
-- **World Entry**: Unique banner for each of 5 worlds
+- **World Entry**: Unique banner for each of 8 worlds
 
 #### Animated Elements
 - ⭐ **Coin Animation**: XP rewards with sparkling coin effects

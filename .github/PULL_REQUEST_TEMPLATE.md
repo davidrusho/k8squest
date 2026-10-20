@@ -24,6 +24,9 @@ Fixes #(issue number)
 - [ ] World 3 - Networking
 - [ ] World 4 - Storage
 - [ ] World 5 - Security
+- [ ] World 6 - Cluster Architecture
+- [ ] World 7 - Troubleshooting
+- [ ] World 8 - Cluster lifecycle
 - [ ] Game Engine
 - [ ] Documentation
 - [ ] Other: ___________

@@ -19,7 +19,7 @@
 | **19** | Stateful App Data Loss | 200 | Advanced | StatefulSet vs Deployment, persistent storage, pod identity |
 | **20** | ReplicaSet Without Deployment | 150 | Beginner | ReplicaSet, Deployment, resource ownership, rollouts |
 
-**Total XP**: 2,000 XP  
+**Total XP**: 2,050 XP  
 **Total Levels**: 10  
 **Average Time**: 13.5 minutes per level  
 

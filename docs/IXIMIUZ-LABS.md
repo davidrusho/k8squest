@@ -1,5 +1,7 @@
 # iximiuz Labs Packaging
 
+> This page comes from the upstream project. The published image `docker.io/mmengineer42/k8squest` was built from upstream and covers Worlds 1-5 only. It has none of this fork's Worlds 6-8, and as the README notes, those worlds cannot run in the container image as built.
+
 # Container image
 
 Build the image from the repository root:

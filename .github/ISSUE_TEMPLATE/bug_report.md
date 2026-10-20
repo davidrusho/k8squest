@@ -17,6 +17,9 @@ Which level or world is affected?
 - [ ] World 3 - Networking (Levels 21-30)
 - [ ] World 4 - Storage (Levels 31-40)
 - [ ] World 5 - Security (Levels 41-50)
+- [ ] World 6 - Cluster Architecture & Extensions (Levels 51-60)
+- [ ] World 7 - Troubleshooting (Levels 61-70)
+- [ ] World 8 - Cluster lifecycle with kubeadm (Levels 71-76)
 - [ ] Game Engine / UI
 - [ ] Other
 

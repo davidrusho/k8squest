@@ -10,11 +10,11 @@ K8sQuest Learning Path
 ├─ WORLD 1: Core Kubernetes Basics ⭐
 │  │  Difficulty: Beginner | Time: 3-5 hours | XP: 1,500
 │  │  
-│  ├─ Level 1: CrashLoopBackOff (150 XP) ★ START HERE
+│  ├─ Level 1: CrashLoopBackOff (100 XP) ★ START HERE
 │  │  Prerequisites: None
 │  │  Skills: kubectl logs, pod debugging, exit codes
 │  │  
-│  ├─ Level 2: Deployment Basics (100 XP)
+│  ├─ Level 2: Deployment Basics (150 XP)
 │  │  Prerequisites: Level 1
 │  │  Skills: Deployments, rolling updates
 │  │  
@@ -22,7 +22,7 @@ K8sQuest Learning Path
 │  │  Prerequisites: Level 1
 │  │  Skills: Image management, registry auth
 │  │  
-│  ├─ Level 4: Pending Pod (100 XP)
+│  ├─ Level 4: Pending Pod (150 XP)
 │  │  Prerequisites: Level 1
 │  │  Skills: Resource requests, scheduling
 │  │  
@@ -30,7 +30,7 @@ K8sQuest Learning Path
 │  │  Prerequisites: Level 1, 2
 │  │  Skills: Labels, selectors, service discovery
 │  │  
-│  ├─ Level 6: Port Mismatches (150 XP)
+│  ├─ Level 6: Port Mismatches (100 XP)
 │  │  Prerequisites: Level 5
 │  │  Skills: Networking basics, port mapping
 │  │  
@@ -42,7 +42,7 @@ K8sQuest Learning Path
 │  │  Prerequisites: Level 7
 │  │  Skills: Log navigation, debugging multi-container
 │  │  
-│  ├─ Level 9: Init Containers (150 XP)
+│  ├─ Level 9: Init Containers (200 XP)
 │  │  Prerequisites: Level 7
 │  │  Skills: Pod lifecycle, init containers
 │  │  
@@ -199,9 +199,9 @@ Week 2: Review missed concepts
   • Read debriefs for weak areas
   • Practice real-world scenarios
   
-Result: Worlds 1-5 cover parts of the CKA and CKAD curricula (see
+Result: Worlds 1-8 cover parts of the CKA and CKAD curricula (see
         Certification Alignment below). They are practice, not full
-        exam preparation. Worlds 7-8 are being added to close the remaining gaps.
+        exam preparation. Worlds 6-8 close most of the gaps left by Worlds 1-5.
 ```
 
 ---
@@ -384,11 +384,11 @@ After completing a world, explain the concepts to a colleague. Teaching solidifi
 
 ## 🏆 Achievement Milestones
 
-- 🥉 **Bronze Explorer** - Complete World 1 (1,450 XP)
-- 🥈 **Silver Operator** - Complete World 2 (3,450 total XP)
-- 🥇 **Gold Engineer** - Complete World 3 (5,450+ total XP)
-- 💎 **Platinum Architect** - Complete World 4 (7,950+ total XP)
-- 👑 **K8s Master** - Complete All Worlds (10,000+ total XP)
+- 🥉 **Bronze Explorer** - Complete World 1 (1,500 XP)
+- 🥈 **Silver Operator** - Complete World 2 (3,550 total XP)
+- 🥇 **Gold Engineer** - Complete World 3 (5,850 total XP)
+- 💎 **Platinum Architect** - Complete World 4 (8,300 total XP)
+- 👑 **K8s Master** - Complete All Worlds (20,050 total XP)
 
 ---
 
