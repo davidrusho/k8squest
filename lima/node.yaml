@@ -1,0 +1,68 @@
+# Added 2026 by David Rusho; see CHANGES.md
+# Lima instance definition for the two machines World 8 builds a kubeadm cluster on
+# (k8squest-cp and k8squest-worker). The engine creates them from this file on first
+# entry to the world (engine/level_reset.py ensure_world_cluster); they differ only by
+# name, CPU and memory.
+#
+# A plain Ubuntu 26.04 LTS server image, NOT lima's k8s template: that template runs
+# kubeadm init for you, and levels 71-73 teach exactly that. The image is pinned to the
+# release-20260927 build, with the sha256 digests Lima 2.2.1 ships for it.
+#
+# Both machines join the shared `user-v2` network, the only Lima network that lets
+# one VM reach another (https://lima-vm.io/docs/config/network/user-v2/); each is
+# reachable from the other as lima-<instance>.internal.
+minimumLimaVersion: 2.0.0
+
+images:
+- location: "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img"
+  arch: "x86_64"
+  digest: "sha256:8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2"
+  variant: "server"
+- location: "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-arm64.img"
+  arch: "aarch64"
+  digest: "sha256:63a93bd5a8d76e33b15ceb5daa3657bd79be804748051ab178e643b0f5da22e7"
+  variant: "server"
+
+cpus: 2
+memory: "2.5GiB"
+disk: "16GiB"
+
+# Lima's own ubuntu-26.04 template sets this: the first-boot rename of the NIC fails on
+# 26.04 (LP: #2136392) and would block boot for 120 seconds without it.
+param:
+  internal_netplanOptional: "true"
+  # marks a machine as created by this game (engine/level_reset.py refuses a same-named machine without it)
+  k8squest_world: "8"
+# Lima rejects a param nothing uses; per its documentation "In provisioning scripts and probes they are
+# also available as predefined environment variables, prefixed with PARAM_". The file is also a marker
+# on the machine itself.
+provision:
+- mode: system
+  script: |
+    #!/bin/bash
+    echo "$PARAM_k8squest_world" > /etc/k8squest-world
+
+# no host directories in the guests, and no container runtime installed by Lima: the
+# levels install containerd themselves
+mounts: []
+containerd:
+  system: false
+  user: false
+
+networks:
+- lima: user-v2
+
+# Only the API server port is forwarded to the host (so kubectl on the host can reach the
+# cluster once one exists); every other guest port, kubelet's included, stays inside.
+portForwards:
+- guestPort: 6443
+  guestIP: "0.0.0.0"
+  guestIPMustBeZero: false
+  hostPort: 16443
+- guestIP: "0.0.0.0"
+  guestIPMustBeZero: false
+  proto: any
+  ignore: true
+- guestIP: "127.0.0.1"
+  proto: any
+  ignore: true

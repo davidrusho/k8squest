@@ -1,0 +1,14 @@
+🔍 HINT 2: One command prints all of it
+
+On the control plane:
+
+   sudo kubeadm token create --print-join-command
+
+It creates a token and prints the whole kubeadm join command, including the API
+server address and --discovery-token-ca-cert-hash sha256:<hash>.
+
+If you only had a token, the hash can be computed from the CA certificate:
+
+   openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //'
+
+🤔 Question: which machine do you run the printed command on?

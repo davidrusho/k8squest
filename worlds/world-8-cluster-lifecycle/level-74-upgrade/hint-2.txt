@@ -1,0 +1,20 @@
+🔍 HINT 2: Control plane, then the worker
+
+On the control plane:
+
+   sudo kubeadm upgrade plan             # lists the versions you can upgrade to
+   sudo kubeadm upgrade apply v1.37.1    # upgrades apiserver, controller-manager, scheduler, etcd, kube-proxy, CoreDNS
+
+The control-plane pods restart. Then the node itself: drain it, upgrade the kubelet
+and kubectl packages, restart the kubelet, uncordon:
+
+   kubectl drain lima-k8squest-cp --ignore-daemonsets
+
+On the worker the second command is different:
+
+   sudo kubeadm upgrade node             # NOT "apply": the worker only needs its kubelet configuration upgraded
+
+and the drain is run from a machine that has kubectl access to the cluster (the control plane).
+
+🤔 Question: the kubelet may be one minor version older than the API server, never newer.
+Which one do you upgrade first?

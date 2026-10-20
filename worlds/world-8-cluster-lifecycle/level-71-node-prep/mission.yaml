@@ -1,0 +1,37 @@
+level: 71
+title: "Nodes That Are Not Ready for Kubernetes"
+name: "Nodes That Are Not Ready for Kubernetes"
+objective: "Prepare the control-plane machine so that kubeadm init passes its checks: swap off, kernel modules, IP forwarding and containerd on the systemd cgroup driver"
+world: "Cluster lifecycle with kubeadm"
+difficulty: "intermediate"
+xp: 250
+expected_time: "15-20 minutes"
+concepts:
+  - kubeadm
+  - node-prerequisites
+  - containerd
+  - cgroup-driver
+description: |
+  World 8 builds a real cluster with kubeadm, from nothing, on two virtual machines
+  that Lima runs for you:
+
+    k8squest-cp       will be the control plane
+    k8squest-worker   will be the worker (it is already prepared; you only touch the
+                      control-plane machine in this level)
+
+  There is no cluster yet, so kubectl has nothing to talk to. You work on the machines:
+
+    limactl shell k8squest-cp        (you are an ordinary user there; use sudo)
+
+  kubeadm, kubelet and kubectl are installed on k8squest-cp, and so is the containerd
+  package, but nobody has prepared the machine. If you ran `kubeadm init` now it would
+  stop at its pre-flight checks, and some of what is missing it would not even notice.
+
+  Get the machine ready, following the Kubernetes documentation for container runtimes
+  and for installing kubeadm. Every change has to survive a reboot, not just work now.
+learning_objectives:
+  - Turn swap off now and keep it off across reboots
+  - Load the overlay and br_netfilter kernel modules now and at every boot
+  - Enable IPv4 packet forwarding with a sysctl.d file
+  - Generate containerd's configuration and set SystemdCgroup = true
+  - Use kubeadm's own pre-flight checks to see whether a node is ready

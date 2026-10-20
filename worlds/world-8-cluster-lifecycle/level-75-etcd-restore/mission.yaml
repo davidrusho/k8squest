@@ -1,0 +1,40 @@
+level: 75
+title: "Lose the Ledger, Restore etcd"
+name: "Lose the Ledger, Restore etcd"
+objective: "Save an etcd snapshot of the control plane, survive an accidental delete of the ledger workload, and restore the cluster's data from the snapshot with etcdutl"
+world: "Cluster lifecycle with kubeadm"
+difficulty: "expert"
+xp: 350
+expected_time: "25-35 minutes"
+concepts:
+  - etcd-snapshot
+  - etcdctl
+  - etcdutl
+  - disaster-recovery
+description: |
+  The two-node cluster runs the ledger application: a Deployment ledger (2 replicas) and
+  its ConfigMap ledger-config, in the namespace k8squest. Nobody has a backup of the
+  cluster's data store yet. You are going to take one, lose the application the way a
+  tired operator would, and bring it back from the backup.
+
+    limactl shell k8squest-cp
+
+  etcdctl and etcdutl are installed on the control-plane machine, which is where the etcd
+  static pod keeps its data (/var/lib/etcd).
+
+  1. Save a snapshot to /var/backups/etcd/k8squest-snapshot.db (the directory exists) and
+     check it with etcdutl.
+  2. The accident: delete the ledger Deployment and the ledger-config ConfigMap.
+  3. Restore the snapshot. The Kubernetes documentation for restoring an etcd cluster
+     says what must be stopped first and how the restored data directory reaches etcd.
+     Afterwards the ledger Deployment and its ConfigMap are back, and the cluster is
+     healthy again.
+
+  A restored etcd member starts a new cluster identity; that is how this level can tell
+  a restore from a lucky guess.
+learning_objectives:
+  - Save a snapshot with etcdctl (endpoint and TLS flags come from the etcd static pod manifest)
+  - Check a snapshot file with etcdutl snapshot status
+  - Stop the API server and etcd by moving their static-pod manifests, and bring them back
+  - Restore a snapshot into a new data directory with etcdutl snapshot restore
+  - Point the etcd static pod at the restored data directory

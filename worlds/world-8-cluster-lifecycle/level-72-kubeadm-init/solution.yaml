@@ -1,0 +1,11 @@
+# Level 72 has no manifest fix: the cluster is created with commands on the machine.
+#
+#   limactl shell k8squest-cp
+#   sudo kubeadm init --pod-network-cidr=10.244.0.0/16     # the CIDR Flannel's manifest uses
+#   mkdir -p $HOME/.kube
+#   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+#   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+#   kubectl get nodes                                      # NotReady: no pod network yet
+#   kubectl get pods -A                                    # coredns Pending
+#   kubectl apply -f https://github.com/flannel-io/flannel/releases/download/v0.28.9/kube-flannel.yml
+#   kubectl get nodes -w                                   # Ready within a minute

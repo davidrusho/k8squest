@@ -1,0 +1,11 @@
+🔍 HINT 1: What does a join need?
+
+   limactl shell k8squest-cp
+   kubectl get nodes                  # one node
+   sudo kubeadm token list            # nothing: there is no token to join with
+
+kubeadm join has to prove two things. The joining machine proves to the cluster that
+it may join (a bootstrap token). The cluster proves to the machine that it is the
+right cluster (the hash of the cluster CA's public key).
+
+🤔 Question: the kubeadm page says a token expires. After how long?

@@ -1,0 +1,14 @@
+🔍 HINT 1: Start from the documentation's order
+
+   limactl shell k8squest-cp
+
+The kubeadm page "Creating a cluster with kubeadm" has the order: choose a pod
+network add-on FIRST, because it can require an argument to kubeadm init. Flannel's
+page says what:
+
+   "pass --pod-network-cidr=10.244.0.0/16 to kubeadm init to ensure that the podCIDR is set"
+
+After kubeadm init finishes it prints what to do next. Read that output; it is the
+recipe for the kubeconfig and for the join command you will need in level 73.
+
+🤔 Question: what would happen to Flannel if the node had no podCIDR?

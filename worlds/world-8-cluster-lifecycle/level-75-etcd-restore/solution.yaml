@@ -1,0 +1,16 @@
+# Level 75 has no manifest fix: the data is recovered with etcdutl.
+#
+#   limactl shell k8squest-cp
+#   sudo -i
+#   export KUBECONFIG=/etc/kubernetes/admin.conf
+#   E="--endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key"
+#   etcdctl $E snapshot save /var/backups/etcd/k8squest-snapshot.db
+#   etcdutl snapshot status /var/backups/etcd/k8squest-snapshot.db -w table
+#   kubectl -n k8squest delete deployment ledger ; kubectl -n k8squest delete configmap ledger-config     # the accident
+#   mkdir /root/parked
+#   mv /etc/kubernetes/manifests/kube-apiserver.yaml /etc/kubernetes/manifests/etcd.yaml /root/parked/   # stop the API server and etcd
+#   crictl ps                                            # wait until neither runs
+#   etcdutl --data-dir /var/lib/etcd-restored snapshot restore /var/backups/etcd/k8squest-snapshot.db
+#   sed -i 's|path: /var/lib/etcd$|path: /var/lib/etcd-restored|' /root/parked/etcd.yaml    # volumes.hostPath.path of etcd-data
+#   mv /root/parked/etcd.yaml /root/parked/kube-apiserver.yaml /etc/kubernetes/manifests/
+#   kubectl get pods -n k8squest                         # ledger is back

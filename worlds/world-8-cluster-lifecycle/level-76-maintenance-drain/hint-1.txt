@@ -1,0 +1,18 @@
+🔍 HINT 1: See what runs where
+
+   limactl shell k8squest-cp
+   kubectl get nodes
+   kubectl get pods -A -o wide
+   kubectl get pdb -n k8squest
+
+Two things on the worker will stop a plain drain: pods of a DaemonSet (Flannel and
+kube-proxy run on every node) and pods with an emptyDir volume (their data is lost
+when the pod is evicted). A third thing paces the drain: the PodDisruptionBudget.
+
+   kubectl drain lima-k8squest-worker
+
+Read the error. It names the flag for each obstacle. (A drain that fails has already
+cordoned the node: look at kubectl get nodes.)
+
+🤔 Question: a DaemonSet pod evicted from a drained node would be recreated on the same
+node at once. What does kubectl drain do about that when you pass --ignore-daemonsets?

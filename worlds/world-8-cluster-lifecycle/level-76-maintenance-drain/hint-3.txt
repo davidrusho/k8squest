@@ -1,0 +1,14 @@
+🔍 HINT 3: Drain, then uncordon
+
+   kubectl drain lima-k8squest-worker --ignore-daemonsets --delete-emptydir-data
+   kubectl get nodes                       # worker: Ready,SchedulingDisabled
+   kubectl get pods -n k8squest -o wide    # all 4 web pods on the control plane
+
+The node is now safe to reboot (the machine is untouched in this level). To bring it
+back into service:
+
+   kubectl uncordon lima-k8squest-worker
+   kubectl get nodes                       # worker: Ready
+
+Uncordon only makes the node schedulable again. The web pods stay where they are;
+Kubernetes does not move running pods back for you.

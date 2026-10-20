@@ -1,0 +1,19 @@
+🔍 HINT 2: Four things, each in the documentation
+
+1. Swap. The kubelet's default is to fail to start when swap is on (kubeadm install
+   page, "Swap configuration"). `swapoff -a` is temporary; /etc/fstab brings swap
+   back at boot.
+
+2. Kernel modules. overlay is what containerd's snapshotter uses; br_netfilter is
+   required by flannel, the pod network you will install in level 72, and kubeadm
+   no longer checks for it. A file in /etc/modules-load.d/ loads modules at boot.
+
+3. IPv4 forwarding. The container runtimes page gives the sysctl and the
+   /etc/sysctl.d/ file to put it in. Check with `sysctl net.ipv4.ip_forward`.
+
+4. containerd. The package ships with NO configuration file. The container runtimes
+   page says how to generate one and which setting selects the systemd cgroup driver:
+
+      containerd config default
+
+🤔 Question: which file lists the swap that comes back at boot?

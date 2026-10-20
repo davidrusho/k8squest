@@ -1,0 +1,3 @@
+# Level 71 has no Kubernetes resources: there is no cluster yet. The broken state is the
+# control-plane machine itself, put into place by setup.sh (swap on, IP forwarding off,
+# br_netfilter not loaded and not configured to load, containerd on its built-in defaults).

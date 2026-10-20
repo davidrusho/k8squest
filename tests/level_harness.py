@@ -27,20 +27,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "engine"))
-from level_reset import (clear_leftovers, context_for, describe_failures,  # noqa: E402
-                         level_env, run_world_heal, world_cluster)
+from level_reset import (LIMA_INSTANCES, clear_leftovers, context_for,  # noqa: E402
+                         delete_lima_instances, describe_failures, ensure_world_cluster,
+                         level_env, lima_status, run_world_heal, world_cluster, world_has_api)
 from world_discovery import discover_worlds  # noqa: E402
 
 NS = os.environ.get("K8SQUEST_NAMESPACE", "k8squest")
-# world.yaml `cluster:` -> (kind cluster name, kind config file)
+# world.yaml `cluster:` -> (kind cluster name, kind config file). `lima` (World 8) is not a
+# kind cluster: ensure_cluster hands it to engine/level_reset.py, which creates the two
+# Lima machines (instance names in level_reset.LIMA_INSTANCES), and the harness deletes
+# the machines it created.
 CLUSTERS = {
     "kind": ("k8squest", "kind/cluster.yaml"),
     "kind-multinode": ("k8squest-multinode", "kind/multinode.yaml"),
 }
+LIMA = "lima"
 NS_YAML = f"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {NS}\n"
 SETTLE_BROKEN = 10      # seconds to let broken state settle before asserting FAIL
 FIX_TIMEOUT = 150       # seconds to wait for validate.sh to pass after the fix
-SETUP_TIMEOUT = 480
+SETUP_TIMEOUT = 900     # World 8's first setup installs packages on fresh machines
 # Levels whose validate.sh counts accumulated restarts need longer to turn red.
 SETTLE_OVERRIDE = {"level-12-liveness": 90}
 CTX = context_for("kind")   # the current world's context; set per world in main()
@@ -62,6 +67,11 @@ def kubectl(*a, **kw):
 
 def ensure_cluster(cluster):
     """Returns (ok, why, created). Only a cluster we created is ours to delete."""
+    if cluster == LIMA:
+        before = set(lima_status() or {})
+        ok, why = ensure_world_cluster(cluster, ROOT, say=lambda m: print(f"   {m}", flush=True))
+        # only the machines this run created are ours to delete
+        return ok, why, [n for n, _, _ in LIMA_INSTANCES if n not in before]
     if cluster not in CLUSTERS:
         return False, f"cluster type '{cluster}' not supported yet", False
     name, config = CLUSTERS[cluster]
@@ -75,6 +85,16 @@ def ensure_cluster(cluster):
         created = True
     r = run(["kubectl", "--context", ctx, "get", "nodes", "--request-timeout=10s"])
     return (r.returncode == 0), r.stderr.strip(), created
+
+
+def cleanup_created(created):
+    """Delete what this run created: kind clusters by name, and ONLY the Lima machines in the list."""
+    lima = [n for kind, n in created if kind == LIMA]
+    for kind, name in created:
+        if kind != LIMA:
+            run(["kind", "delete", "cluster", "--name", name], timeout=300)
+    if lima:
+        delete_lima_instances(lima)
 
 
 def kube_env():
@@ -103,11 +123,13 @@ def reset(level_path):
     ok, msg = run_world_heal(level_path, say=lambda m: None)
     if not ok:
         return False, "world heal failed: " + msg[-200:]
-    r = run(["kubectl", "apply", "-f", "-"], input=NS_YAML)
-    if r.returncode:
-        return False, "ns apply: " + r.stderr[-200:]
-    run(["kubectl", "delete", "all", "--all", "-n", NS, "--ignore-not-found"], timeout=180)
-    reset_failed = clear_leftovers(NS)   # same leftover reset the engine does after `delete all`
+    reset_failed = []
+    if world_has_api(world_cluster(level_path)):   # World 8 levels 71/72 start with no cluster
+        r = run(["kubectl", "apply", "-f", "-"], input=NS_YAML)
+        if r.returncode:
+            return False, "ns apply: " + r.stderr[-200:]
+        run(["kubectl", "delete", "all", "--all", "-n", NS, "--ignore-not-found"], timeout=180)
+        reset_failed = clear_leftovers(NS)   # same leftover reset the engine does after `delete all`
     warn = ("reset warnings: " + describe_failures(reset_failed)) if reset_failed else ""
     setup = level_path / "setup.sh"
     if setup.exists():
@@ -115,7 +137,8 @@ def reset(level_path):
                 env={**level_env(level_path), "NAMESPACE": NS})
         if r.returncode:
             return False, "setup.sh failed: " + (r.stderr or r.stdout)[-200:]
-        if "broken.yaml" not in setup.read_text(errors="replace"):
+        # a comment-only broken.yaml (World 8 levels 71-73: no cluster, no workload) has nothing to apply
+        if "broken.yaml" not in setup.read_text(errors="replace") and solution_applyable(level_path / "broken.yaml"):
             return True, "setup.sh never applies broken.yaml (engine skips it)" + _w(warn)
         return True, warn
     r = run(["kubectl", "apply", "-f", str(level_path / "broken.yaml")])
@@ -239,12 +262,15 @@ def _main():
     for w, l in levels:
         if w.cluster not in ready:
             ready[w.cluster] = ensure_cluster(w.cluster)
-            if ready[w.cluster][0] and ready[w.cluster][2]:
-                created_clusters.append(CLUSTERS[w.cluster][0])
+            if (ready[w.cluster][0] or w.cluster == LIMA) and ready[w.cluster][2]:
+                if w.cluster == LIMA:
+                    created_clusters += [(LIMA, n) for n in ready[w.cluster][2]]
+                else:
+                    created_clusters.append(("kind", CLUSTERS[w.cluster][0]))
         ok, why, _ = ready[w.cluster]
         if not ok:
             rows.append((l.name, "SKIP", "SKIP", 0, why)); continue
-        if w.cluster in CLUSTERS and CTX != context_for(w.cluster):
+        if (w.cluster in CLUSTERS or w.cluster == LIMA) and CTX != context_for(w.cluster):
             CTX = context_for(w.cluster)
             print(f"-- kubectl context -> {CTX} ({w.dir_name})", flush=True)
         kube_env()   # every level: the player's context follows the world, as in the engine
@@ -268,8 +294,7 @@ def _main():
 
     # only clusters this run created are deleted; one that was already there is left alone
     if created_clusters and not a.keep_cluster:
-        for name in created_clusters:
-            run(["kind", "delete", "cluster", "--name", name], timeout=300)
+        cleanup_created(created_clusters)
     # a skipped level was not proven, so it fails the run as well
     return 1 if (fail or skip) else 0
 

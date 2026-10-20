@@ -1,0 +1,15 @@
+🔍 HINT 2: kubectl, then the node's state
+
+kubeadm writes the administrator's kubeconfig to /etc/kubernetes/admin.conf and
+tells you to copy it to $HOME/.kube/config. Do that, then:
+
+   kubectl get nodes
+   kubectl get pods -A
+   kubectl describe node lima-k8squest-cp | grep -A3 Ready
+
+The node is NotReady and CoreDNS is Pending. The Ready condition says why: there is
+no CNI configuration yet. A pod network add-on supplies it. kubeadm is CNI agnostic:
+installing the add-on is your job, with kubectl apply.
+
+🤔 Question: why can the control-plane static pods (apiserver, etcd) run without a
+pod network, while CoreDNS cannot?

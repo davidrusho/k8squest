@@ -1,0 +1,16 @@
+🔍 HINT 3: Point etcd at the restored data, start both again
+
+In the manifest you moved away, the etcd-data volume is a hostPath. The Kubernetes
+documentation: change /etc/kubernetes/manifests/etcd.yaml's volumes.hostPath.path for
+name: etcd-data to the new data directory.
+
+   sudo sed -i 's|path: /var/lib/etcd$|path: /var/lib/etcd-restored|' /root/parked/etcd.yaml
+   sudo grep -B1 -A2 'name: etcd-data' /root/parked/etcd.yaml
+
+Put both manifests back; the kubelet starts the static pods again within a minute:
+
+   sudo mv /root/parked/etcd.yaml /root/parked/kube-apiserver.yaml /etc/kubernetes/manifests/
+   kubectl get nodes
+   kubectl get deployment,cm -n k8squest
+
+If you restored to the SAME directory instead, it must be deleted (or renamed) first.

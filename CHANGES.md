@@ -14,6 +14,26 @@ are unchanged from upstream.
 - `worlds/world-5-security/level-43-resourcequota` and `level-48-pod-security` - the broken object is now a Deployment (`resource-hungry-app`, `secure-app`) instead of a bare Pod. Quota and Pod Security `enforce` apply to Pods, so the Deployment is admitted and the engine's `kubectl apply` succeeds; the rejection shows as `FailedCreate` events on the ReplicaSet (`kubectl describe rs`, `kubectl get events`). Before, the bare Pod was rejected at apply time and the engine aborted with "Deployment failed". `broken.yaml`, `solution.yaml`, `validate.sh`, mission, hints and debrief were updated; `validate.sh` of level 48 now also requires a `seccompProfile` instead of only warning.
 - `worlds/world-5-security/level-45-node-affinity`, `level-46-taints-tolerations`, `level-50-chaos-finale` - `setup.sh` now applies `broken.yaml` after preparing the node. The engine runs only `setup.sh` when a level has one, so the player used to get an empty namespace.
 
+## World 8: Cluster lifecycle with kubeadm, and Lima virtual machines
+
+### Added
+
+- `worlds/world-8-cluster-lifecycle/` - World 8 (`order: 8`, `cluster: lima`, `requires: [limactl]`), levels 71-76, 2,050 XP: node prerequisites checked with `kubeadm init phase preflight` (71), `kubeadm init` and a Flannel pod network (72), `kubeadm join` with a token and the CA hash (73), a v1.36.5 to v1.37.1 upgrade (74), an etcd snapshot and a restore with `etcdutl` (75), and a finale that drains, maintains and uncordons a node behind a PodDisruptionBudget (76).
+- `worlds/world-8-cluster-lifecycle/_shared/lib.sh` and `_shared/guest/` - helpers that put the two machines into the state before a level from any state (`kubeadm reset` plus cleanup, then the preparation that level needs), run commands in the machines with `limactl shell`, build the cluster, and export the cluster's credentials into the kubectl context `k8squest-lima`. Versions are pinned in this one file: Kubernetes v1.36.5 and v1.37.1 (packages 1.36.5-1.1 and 1.37.1-1.1 from pkgs.k8s.io) and Flannel v0.28.9.
+- `lima/node.yaml` - the Lima instance definition for `k8squest-cp` and `k8squest-worker`: Ubuntu 26.04 server image pinned to the release-20260927 build with sha256 digests, the shared `user-v2` network, no host mounts, only the API server port forwarded to the host (16443).
+- `engine/level_reset.py` - `cluster: lima`: `context_for("lima")` is `k8squest-lima`; `lima_preflight` checks for `limactl` 2.0 or newer, and on Linux for QEMU, `/dev/kvm` readable and writable, and 8 GiB of RAM, and says what is missing; `ensure_world_cluster` creates and starts the two machines from `lima/node.yaml` (reusing existing ones) and makes sure the kubectl context exists (a placeholder with no credentials until a level builds a cluster); `world_has_api` lets the engine, `engine/reset.py` and the harness skip the namespace work for levels that start before any cluster exists.
+- `solution.sh` convention extended to levels 71-76.
+- Supply chain and ownership: the etcd tarball (3.7.0, per architecture) and the Flannel v0.28.9 manifest are pinned by sha256 in the repo (`_shared/guest/base.sh`, `_shared/lib.sh`) and refused on a mismatch. The machines the game creates carry the Lima template parameter `k8squest_world: "8"` (`lima/node.yaml`); a same-named machine without it is refused with instructions to delete or clone it, and the harness deletes only the machines it created.
+
+### Modified
+
+- `engine/engine.py` and `engine/reset.py` - skip the connectivity check, the namespace apply, `kubectl delete all` and the leftover clean-up when `world_has_api` says the World 8 cluster does not exist yet.
+- `tests/level_harness.py` - supports `lima`: creates the machines through `ensure_world_cluster`, deletes the ones it created, treats a comment-only `broken.yaml` as having nothing to apply, and allows 900 seconds for a setup or a scripted fix.
+- `tests/test_level_reset.py` - tests for the Lima mapping, the preflight, creating, starting and reusing the machines, the placeholder context, and skipping the namespace work, using a stub `limactl`.
+- `tests/test_discovery.py` - expects 8 worlds, 76 levels and 20,050 XP.
+- `README.md`, `docs/ARCHITECTURE.md`, `docs/LEARNING-PATH.md`, `docs/contributing.md` - World 8, its requirements (Lima, KVM or macOS, 5.5 GiB of RAM for the machines), the Lima cluster type, and totals (76 levels, 20,050 XP); the CKA rows say what is and is not covered.
+- `worlds/world-7-troubleshooting/level-70-troubleshooting-finale/debrief.md` - "What's Next" points to World 8.
+
 ## World 7: Troubleshooting, and multi-node cluster support
 
 ### Added

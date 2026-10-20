@@ -1,0 +1,38 @@
+level: 76
+title: "FINALE: Maintenance Window on the Worker"
+name: "FINALE: Maintenance Window on the Worker"
+objective: "Take the worker out of service for maintenance without dropping the web application: drain it past the obstacles, then bring it back with uncordon"
+world: "Cluster lifecycle with kubeadm"
+difficulty: "expert"
+xp: 500
+expected_time: "20-30 minutes"
+concepts:
+  - cordon-drain
+  - poddisruptionbudget
+  - uncordon
+  - maintenance
+description: |
+  k8squest-worker (the node lima-k8squest-worker) needs a kernel update and a reboot.
+  The two-node cluster you built runs the web Deployment: 4 replicas, spread over both
+  nodes, behind a PodDisruptionBudget that says at least 3 of them must be available at
+  any time. (This lab lets the control plane run workloads too: the taint kubeadm puts on
+  it was removed with `kubectl taint node lima-k8squest-cp node-role.kubernetes.io/control-plane-`.)
+
+    limactl shell k8squest-cp        (kubectl works there; or use the context k8squest-lima)
+
+  Take the worker out of service the safe way:
+
+  1. Stop new pods landing on it and evict the ones that run there. A plain
+     `kubectl drain` will refuse; read what it says and deal with each obstacle without
+     deleting the PodDisruptionBudget and without force-deleting the web pods.
+  2. The maintenance itself is not part of this level.
+  3. Bring the node back into service.
+
+  At the end the worker is Ready and schedulable, every web pod that ran on it has been
+  evicted and replaced (not left behind), and all 4 replicas are available.
+learning_objectives:
+  - Read the refusals of kubectl drain (DaemonSet pods, local storage) and pick the right flags
+  - Watch a PodDisruptionBudget pace an eviction
+  - Tell cordon (unschedulable) from drain (cordon plus eviction)
+  - Return a node to service with kubectl uncordon
+  - Explain why pods do not move back on their own

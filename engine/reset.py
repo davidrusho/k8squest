@@ -29,7 +29,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 sys.path.insert(0, str(Path(__file__).parent))
-from level_reset import deploy_level, ensure_world_cluster, world_cluster
+from level_reset import deploy_level, ensure_world_cluster, world_cluster, world_has_api
 
 console = Console()
 
@@ -62,11 +62,12 @@ def reset_level_any_world(level):
     if not ok:
         console.print(f"[red]Error: {why}[/red]")
         return False
-    # Delete namespace (clean slate)
-    console.print("Deleting namespace...")
-    result_del = run_kubectl_with_timeout(["kubectl", "delete", "namespace", "k8squest", "--ignore-not-found"], timeout=180)
-    if result_del is None:
-        return False
+    # Delete namespace (clean slate); a World 8 level that starts before the cluster exists has none
+    if world_has_api(world_cluster(level_path)):
+        console.print("Deleting namespace...")
+        result_del = run_kubectl_with_timeout(["kubectl", "delete", "namespace", "k8squest", "--ignore-not-found"], timeout=180)
+        if result_del is None:
+            return False
     # Redeploy exactly as the engine does: namespace, delete all, leftovers,
     # then setup.sh if the level has one, otherwise broken.yaml
     console.print("Deploying broken resources...")

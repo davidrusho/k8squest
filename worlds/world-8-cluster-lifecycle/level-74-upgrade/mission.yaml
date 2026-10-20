@@ -1,0 +1,36 @@
+level: 74
+title: "One Minor Version Up"
+name: "One Minor Version Up"
+objective: "Upgrade the two-node kubeadm cluster from Kubernetes v1.36.5 to v1.37.1 the documented way: control plane first, then the worker, without losing the workload"
+world: "Cluster lifecycle with kubeadm"
+difficulty: "expert"
+xp: 350
+expected_time: "25-35 minutes"
+concepts:
+  - kubeadm-upgrade
+  - package-repository
+  - drain-uncordon
+  - version-skew
+description: |
+  The cluster built in levels 72 and 73 is running Kubernetes v1.36.5 on both
+  machines (k8squest-cp and k8squest-worker), and the orders Deployment is serving
+  three replicas. Upgrade the cluster to v1.37.1.
+
+    limactl shell k8squest-cp        limactl shell k8squest-worker
+
+  Follow the kubeadm upgrade documentation, in its order: the control plane first
+  (kubeadm, then `kubeadm upgrade apply`, then the kubelet), then the worker (kubeadm,
+  `kubeadm upgrade node`, then the kubelet). Both machines get their packages from the
+  pkgs.k8s.io repository of ONE minor release (the file
+  /etc/apt/sources.list.d/kubernetes.list), and a minor upgrade needs the next one.
+  Drain each node before its kubelet is upgraded, and leave both nodes schedulable
+  when you are done.
+
+  The workload has to be the same orders Deployment at the end, not a rebuilt one:
+  this is an upgrade in place.
+learning_objectives:
+  - Switch the apt repository to the next minor release
+  - Upgrade kubeadm, run kubeadm upgrade plan and kubeadm upgrade apply on the control plane
+  - Drain a node, upgrade its kubelet and kubectl, restart the kubelet and uncordon the node
+  - Upgrade a worker with kubeadm upgrade node
+  - State the version skew rules between kubeadm, the API server and the kubelet

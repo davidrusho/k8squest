@@ -331,21 +331,22 @@ covers today:
 | Storage | 10% | Storage classes and dynamic provisioning (levels 31, 35); volume types, access modes and reclaim policies (33, 39, 40); PersistentVolumes and PersistentVolumeClaims (World 4) | Covered |
 | Workloads & Scheduling | 15% | Deployments, rollouts and rollbacks, probes, HPA, ConfigMaps and Secrets (Worlds 1, 2, 4); affinity, taints and tolerations, quotas, PriorityClass, PodDisruptionBudgets (World 5); Helm and Kustomize deployments, VPA recommendations (World 6, levels 51, 52, 57) | Mostly covered; VPA is covered only as a `targetRef` fault (World 6, Level 57) |
 | Services & Networking | 20% | Services, endpoints, DNS, Ingress, NetworkPolicy (World 3); Gateway API HTTPRoute attachment, backend references and ReferenceGrant (World 6, levels 55, 56) | Partly covered; authoring a GatewayClass or Gateway is not covered |
-| Cluster Architecture, Installation & Configuration | 25% | RBAC (World 5, and ServiceAccount bindings in World 6 level 58); Helm and Kustomize (levels 51, 52); CRDs (53); RuntimeClass and StorageClass as CRI and CSI extension points (59) | Partly covered; etcd backup is covered (World 7, Level 70). kubeadm install and upgrade, etcd restore and HA control planes are not covered yet |
-| Troubleshooting | 30% | Pod, Deployment, Service and storage faults on a single-node kind cluster (Worlds 1-6, the Level 50 and Level 60 finales); on a 3-node kind cluster (World 7): NotReady nodes and kubelet faults (61, 62), kube-scheduler, kube-controller-manager and kube-apiserver faults (63-65), CoreDNS (66), a missing CNI configuration (67), `kubectl top` and metrics-server (68), `kubectl logs --previous` and `-c` (69), an etcd snapshot, and cordon/drain of a lost worker (70) | Mostly covered. Not covered: kube-proxy and Service routing faults at the node level, node-level resource pressure (eviction), a kubelet client-certificate expiry, and HA control-plane failover. The cluster is not a kubeadm cluster: kind nodes are containers, and etcdctl runs inside the etcd pod |
+| Cluster Architecture, Installation & Configuration | 25% | RBAC (World 5, and ServiceAccount bindings in World 6 level 58); Helm and Kustomize (levels 51, 52); CRDs (53); RuntimeClass and StorageClass as CRI and CSI extension points (59) | Mostly covered; kubeadm node preparation, init, CNI install, join, a minor upgrade, and etcd snapshot and restore are covered on real virtual machines (World 8, levels 71-75; the etcd snapshot is also in World 7, Level 70). HA control planes, certificate renewal and expiry, and kubeadm reconfiguration are not covered |
+| Troubleshooting | 30% | Pod, Deployment, Service and storage faults on a single-node kind cluster (Worlds 1-6, the Level 50 and Level 60 finales); on a 3-node kind cluster (World 7): NotReady nodes and kubelet faults (61, 62), kube-scheduler, kube-controller-manager and kube-apiserver faults (63-65), CoreDNS (66), a missing CNI configuration (67), `kubectl top` and metrics-server (68), `kubectl logs --previous` and `-c` (69), an etcd snapshot, and cordon/drain of a lost worker (70); on kubeadm virtual machines (World 8): drain, PodDisruptionBudgets and uncordon for planned maintenance (76) | Mostly covered. Not covered: kube-proxy and Service routing faults at the node level, node-level resource pressure (eviction), a kubelet client-certificate expiry, and HA control-plane failover. World 7's cluster is not a kubeadm cluster (kind nodes are containers, and etcdctl runs inside the etcd pod); World 8's is |
 
 The two heaviest domains (Troubleshooting 30% and Cluster Architecture 25%)
-are the ones K8sQuest covers least. World 6 covers part of Cluster Architecture and World 7 most of Troubleshooting; one more world is being added:
+are the ones K8sQuest covers least. World 6 covers part of Cluster Architecture, World 7 most of Troubleshooting and World 8 the kubeadm lifecycle:
 
 - **World 6: Cluster Architecture & Extensions** (shipped) - Helm, Kustomize,
   CRDs, cert-manager, Gateway API, VPA, RuntimeClass and StorageClass
 - **World 7: Troubleshooting** (shipped) - node, control-plane, DNS, CNI, metrics
   and log faults on a 3-node kind cluster, plus an etcd snapshot
-- **World 8: kubeadm on Lima VMs** (in progress) - building and repairing a
-  cluster with kubeadm on virtual machines, including etcd restore
+- **World 8: Cluster lifecycle with kubeadm** (shipped) - node preparation,
+  `kubeadm init`, a pod network, `kubeadm join`, a minor upgrade, an etcd
+  snapshot and restore, and node maintenance, on two Lima virtual machines
 
-Until World 8 ships, plan on the official curriculum and a timed
-practice environment for kubeadm install and upgrade, etcd restore and HA.
+Plan on the official curriculum and a timed practice environment for HA control
+planes and certificate management.
 
 ### CKAD (Certified Kubernetes Application Developer)
 

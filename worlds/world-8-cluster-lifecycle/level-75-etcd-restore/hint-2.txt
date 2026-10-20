@@ -1,0 +1,15 @@
+🔍 HINT 2: The restore, as the documentation orders it
+
+"If any API servers are running in your cluster, you should not attempt to restore
+instances of etcd." Stop the API server AND etcd. They are static pods, so the kubelet
+runs whatever manifest is in /etc/kubernetes/manifests: move the two manifests out of
+that directory (somewhere outside it) and watch the containers stop:
+
+   sudo crictl ps
+
+Then restore into a NEW data directory (the directory must not exist yet):
+
+   sudo etcdutl --data-dir /var/lib/etcd-restored snapshot restore /var/backups/etcd/k8squest-snapshot.db
+
+🤔 Question: etcd's manifest still mounts /var/lib/etcd. What has to change in it so that
+the restored directory is the one etcd uses?

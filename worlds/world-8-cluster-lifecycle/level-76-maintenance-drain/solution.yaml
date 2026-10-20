@@ -1,0 +1,15 @@
+# Level 76 has no manifest fix: the node is drained and uncordoned with kubectl.
+#
+#   limactl shell k8squest-cp
+#   kubectl get pods -n k8squest -o wide
+#   kubectl drain lima-k8squest-worker
+#       cordons the node, then: error: unable to drain node ... cannot delete Pods with local storage (use --delete-emptydir-data to override) ...
+#       cannot delete DaemonSet-managed Pods (use --ignore-daemonsets to ignore) ...
+#   kubectl drain lima-k8squest-worker --ignore-daemonsets
+#       error: ... cannot delete Pods with local storage (use --delete-emptydir-data to override)
+#   kubectl drain lima-k8squest-worker --ignore-daemonsets --delete-emptydir-data
+#       evicting pod ... error when evicting ... Cannot evict pod as it would violate the pod's disruption budget.
+#       (kubectl retries; once the replacement is Running on the control plane the next pod is evicted)
+#   kubectl get nodes                          # Ready,SchedulingDisabled: do the maintenance now
+#   kubectl uncordon lima-k8squest-worker
+#   kubectl get pods -n k8squest -o wide       # the web pods run on the control plane; they do not move back

@@ -1,0 +1,28 @@
+🔍 HINT 3: The commands (package version 1.37.1-*)
+
+Both machines:
+
+   sudo sed -i 's|stable:/v1.36/|stable:/v1.37/|' /etc/apt/sources.list.d/kubernetes.list
+   sudo apt-get update
+
+Control plane:
+
+   sudo apt-mark unhold kubeadm && sudo apt-get install -y kubeadm='1.37.1-*' && sudo apt-mark hold kubeadm
+   sudo kubeadm upgrade plan
+   sudo kubeadm upgrade apply v1.37.1
+   kubectl drain lima-k8squest-cp --ignore-daemonsets
+   sudo apt-mark unhold kubelet kubectl && sudo apt-get install -y kubelet='1.37.1-*' kubectl='1.37.1-*' && sudo apt-mark hold kubelet kubectl
+   sudo systemctl daemon-reload && sudo systemctl restart kubelet
+   kubectl uncordon lima-k8squest-cp
+
+Worker (kubeadm upgrade node, then drain from the control plane, kubelet, uncordon):
+
+   sudo apt-mark unhold kubeadm kubectl && sudo apt-get install -y kubeadm='1.37.1-*' kubectl='1.37.1-*' && sudo apt-mark hold kubeadm kubectl
+   sudo kubeadm upgrade node
+   (control plane)  kubectl drain lima-k8squest-worker --ignore-daemonsets
+   sudo apt-mark unhold kubelet && sudo apt-get install -y kubelet='1.37.1-*' && sudo apt-mark hold kubelet
+   sudo systemctl daemon-reload && sudo systemctl restart kubelet
+   (control plane)  kubectl uncordon lima-k8squest-worker
+
+The orders pods wait in Pending while the worker is drained: the control-plane node
+is tainted, so they have nowhere to go. They start again when you uncordon.

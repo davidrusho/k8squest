@@ -1,0 +1,15 @@
+🔍 HINT 2: The flags, and what the budget does
+
+   kubectl drain lima-k8squest-worker --ignore-daemonsets --delete-emptydir-data
+
+drain cordons the node first (it shows Ready,SchedulingDisabled), then evicts the pods
+through the Eviction API, which respects the PodDisruptionBudget. With 4 replicas and
+minAvailable: 3, one pod may be down at a time. You will see lines like:
+
+   error when evicting pods/"web-..." (will retry after 5s): Cannot evict pod as it would violate the pod's disruption budget.
+
+That is not a failure. The Deployment has already created a replacement on the
+control plane, and as soon as it is Ready the next eviction is allowed. Wait; do not
+delete the PodDisruptionBudget and do not force-delete pods.
+
+🤔 Question: what would happen to the application if you had skipped the budget?

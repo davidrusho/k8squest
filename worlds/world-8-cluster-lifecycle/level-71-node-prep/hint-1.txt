@@ -1,0 +1,20 @@
+🔍 HINT 1: Ask kubeadm what it thinks
+
+There is no cluster, so there is no kubectl. Work on the machine:
+
+   limactl shell k8squest-cp
+
+kubeadm can run just its pre-flight checks, without changing anything:
+
+   sudo kubeadm init phase preflight
+
+Read every [ERROR ...] and [WARNING ...] line. Then check the things kubeadm does
+NOT check for you any more, and the kubelet's own rules:
+
+   swapon --show
+   lsmod | grep -E 'overlay|br_netfilter'
+   sysctl net.ipv4.ip_forward
+   ls /etc/containerd/
+
+🤔 Question: which of these would still be wrong after a reboot, even if you fixed
+it with a one-off command?

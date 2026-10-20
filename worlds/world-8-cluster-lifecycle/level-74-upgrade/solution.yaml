@@ -1,0 +1,19 @@
+# Level 74 has no manifest fix: the cluster is upgraded with commands (v1.37.1-1.1 is the package version).
+#
+# On k8squest-cp:
+#   sudo sed -i 's|stable:/v1.36/|stable:/v1.37/|' /etc/apt/sources.list.d/kubernetes.list
+#   sudo apt-mark unhold kubeadm && sudo apt-get update && sudo apt-get install -y kubeadm='1.37.1-*' && sudo apt-mark hold kubeadm
+#   kubeadm version
+#   sudo kubeadm upgrade plan
+#   sudo kubeadm upgrade apply v1.37.1
+#   kubectl drain lima-k8squest-cp --ignore-daemonsets
+#   sudo apt-mark unhold kubelet kubectl && sudo apt-get install -y kubelet='1.37.1-*' kubectl='1.37.1-*' && sudo apt-mark hold kubelet kubectl
+#   sudo systemctl daemon-reload && sudo systemctl restart kubelet
+#   kubectl uncordon lima-k8squest-cp
+# On k8squest-worker:
+#   (the same repository change)  sudo apt-mark unhold kubeadm kubectl && sudo apt-get update && sudo apt-get install -y kubeadm='1.37.1-*' kubectl='1.37.1-*' && sudo apt-mark hold kubeadm kubectl
+#   sudo kubeadm upgrade node
+# On k8squest-cp:    kubectl drain lima-k8squest-worker --ignore-daemonsets
+# On k8squest-worker: sudo apt-mark unhold kubelet && sudo apt-get install -y kubelet='1.37.1-*' && sudo apt-mark hold kubelet
+#                     sudo systemctl daemon-reload && sudo systemctl restart kubelet
+# On k8squest-cp:    kubectl uncordon lima-k8squest-worker

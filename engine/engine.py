@@ -34,7 +34,8 @@ else:  # Unix/Linux/Mac
     import termios
 
 from level_reset import (clear_leftovers, describe_failures, ensure_world_cluster,
-                         expected_context, level_env, run_world_heal, world_cluster)
+                         expected_context, level_env, run_world_heal, world_cluster,
+                         world_has_api)
 from world_discovery import discover_worlds, milestones_for, total_levels, total_xp
 
 # Import retro UI components
@@ -898,11 +899,19 @@ Look for "2/2" ready replicas!
             console.print(f"[dim red]{escape(why)}[/dim red]")
             return False
 
+        # World 8 levels 71 and 72 start before `kubeadm init`: there is no API server yet, so
+        # there is no namespace to prepare and nothing to connect to. The level's setup.sh
+        # (and the player) build the cluster.
+        has_api = world_has_api(cluster)
+        if not has_api:
+            console.print("[cyan]This level starts before the cluster exists, so kubectl has nothing to "
+                          "talk to yet. You work on the virtual machines with limactl.[/cyan]")
+
         # Pre-flight connectivity check with timeout
         check = subprocess.run(
             ["kubectl", "get", "nodes", "--request-timeout=5s"],
             capture_output=True, text=True,
-        )
+        ) if has_api else subprocess.CompletedProcess([], 0, "", "")
         if check.returncode != 0:
             console.print(f"\n[red]⚠️  Cannot connect to cluster:[/red]")
             console.print(f"[dim red]{check.stderr.strip()}[/dim red]")
@@ -924,7 +933,7 @@ Look for "2/2" ready replicas!
                 ["kubectl", "apply", "-f", "-"],
                 input="apiVersion: v1\nkind: Namespace\nmetadata:\n  name: k8squest\n",
                 capture_output=True, text=True,
-            )
+            ) if has_api else subprocess.CompletedProcess([], 0, "", "")
             
             # Check for namespace creation errors
             if result.returncode != 0:
@@ -936,12 +945,13 @@ Look for "2/2" ready replicas!
 
             # Clean up resources from previous level (without deleting the namespace)
             progress.update(task, description="Cleaning up previous level...")
-            subprocess.run(
-                ["kubectl", "delete", "all", "--all", "-n", K8SQUEST_NAMESPACE, "--ignore-not-found"],
-                capture_output=True, text=True,
-            )
+            if has_api:
+                subprocess.run(
+                    ["kubectl", "delete", "all", "--all", "-n", K8SQUEST_NAMESPACE, "--ignore-not-found"],
+                    capture_output=True, text=True,
+                )
             # `delete all` leaves quotas, RBAC, config, PVCs, node taints and labels behind
-            reset_failed = clear_leftovers(K8SQUEST_NAMESPACE)
+            reset_failed = clear_leftovers(K8SQUEST_NAMESPACE) if has_api else []
             if reset_failed:
                 console.print(
                     f"[yellow]⚠️  Some leftovers from earlier levels could not be cleared: "

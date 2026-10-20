@@ -1,0 +1,3 @@
+# Level 73 has no Kubernetes resources of its own: the broken state is a cluster with one
+# node. setup.sh builds the control plane (kubeadm init + Flannel), prepares the worker and
+# deletes every bootstrap token.

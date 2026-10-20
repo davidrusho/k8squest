@@ -31,10 +31,10 @@ console = Console()
 
 BASE_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent
 
-# Update these when a new world lands (World 8 is in progress)
-EXPECTED_WORLD_ORDERS = [1, 2, 3, 4, 5, 6, 7]
-EXPECTED_LEVELS = 70
-EXPECTED_XP = 18000
+# Update these when a new world lands
+EXPECTED_WORLD_ORDERS = [1, 2, 3, 4, 5, 6, 7, 8]
+EXPECTED_LEVELS = 76
+EXPECTED_XP = 20050
 
 
 def level_dirs():
@@ -271,7 +271,12 @@ def check_shared_dirs_are_not_worlds():
     for sol in BASE_DIR.glob("worlds/*/level-*/solution.sh"):
         if not (sol.parent / "solution.yaml").is_file():
             problems.append(f"{sol.parent.name}: solution.sh without solution.yaml")
-        if "broken.yaml" not in (sol.parent / "setup.sh").read_text(errors="replace"):
+        # only a `cluster: lima` world may have a comment-only broken.yaml (World 8 levels 71-73: no cluster yet, no workload)
+        world_yaml = (sol.parent.parent / "world.yaml").read_text(errors="replace")
+        lima_world = any(l.split("#")[0].strip().strip("\"'") == "cluster: lima" for l in world_yaml.splitlines())
+        has_content = (not lima_world) or any(l.strip() and not l.strip().startswith("#")
+                          for l in (sol.parent / "broken.yaml").read_text(errors="replace").splitlines())
+        if has_content and "broken.yaml" not in (sol.parent / "setup.sh").read_text(errors="replace"):
             problems.append(f"{sol.parent.name}: setup.sh never applies broken.yaml")
     return "; ".join(problems) or None
 
@@ -281,9 +286,9 @@ def test_discovery():
 
     tests = [
         # (check, description)
-        (check_world_order, "7 worlds discovered, ordered 1-7 by world.yaml"),
-        (check_level_count, "70 levels on disk and discovered"),
-        (check_xp_total, "XP total is 18000, summed from mission.yaml files"),
+        (check_world_order, "8 worlds discovered, ordered 1-8 by world.yaml"),
+        (check_level_count, "76 levels on disk and discovered"),
+        (check_xp_total, "XP total is 20050, summed from mission.yaml files"),
         (check_unique_level_names, "Level names are unique across worlds"),
         (check_mandatory_files, "Every level has the 8 mandatory files"),
         (check_world_yaml_clusters, "Every world has a world.yaml with a valid cluster"),

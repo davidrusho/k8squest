@@ -1,0 +1,13 @@
+🔍 HINT 3: The commands
+
+   sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+   mkdir -p $HOME/.kube
+   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+   kubectl apply -f https://github.com/flannel-io/flannel/releases/download/v0.28.9/kube-flannel.yml
+   kubectl get nodes -w          # Ready after a minute or so
+   kubectl get pods -A           # coredns Running, kube-flannel Running
+
+If kubeadm init stops, read the error, fix the cause, run `sudo kubeadm reset -f`
+and run kubeadm init again. A half-finished init cannot simply be repeated.

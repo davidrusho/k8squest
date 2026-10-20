@@ -1,0 +1,50 @@
+# The application whose availability the maintenance must protect: 4 replicas spread over
+# the two nodes (preferred, not required, so a drained node does not leave pods Pending),
+# a scratch emptyDir volume per pod, and a PodDisruptionBudget allowing one pod to be
+# down at a time. The cluster (two nodes, Flannel) is built by setup.sh with kubeadm.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: k8squest
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: web
+      containers:
+      - name: web
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi
+        volumeMounts:
+        - name: scratch
+          mountPath: /scratch
+      volumes:
+      - name: scratch
+        emptyDir: {}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: k8squest
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: web

@@ -47,4 +47,4 @@ You diagnosed nodes, every control-plane component, DNS, the pod network, the me
 
 ## 🚀 What's Next
 
-**World 8** (cluster lifecycle on kubeadm VMs, including etcd restore) is in progress.
+**World 8** (cluster lifecycle on kubeadm virtual machines: node preparation, `kubeadm init` and join, a minor upgrade, etcd restore and node maintenance) starts with level 71. It runs on two Lima virtual machines instead of kind, so it needs `limactl` on your host and about 5.5 GiB of RAM for the machines; the first World 8 level creates them.

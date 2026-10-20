@@ -1,0 +1,24 @@
+# The workload that has to survive the upgrade: three orders replicas. The cluster itself
+# (Kubernetes v1.36.5, two nodes, Flannel) is built by setup.sh with kubeadm.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders
+  namespace: k8squest
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: orders
+  template:
+    metadata:
+      labels:
+        app: orders
+    spec:
+      containers:
+      - name: orders
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi

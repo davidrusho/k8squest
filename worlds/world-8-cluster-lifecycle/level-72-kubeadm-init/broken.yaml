@@ -1,0 +1,2 @@
+# Level 72 has no Kubernetes resources: the cluster does not exist yet. setup.sh only puts
+# both machines into the prepared state (kubeadm reset, then the level 71 preparation).

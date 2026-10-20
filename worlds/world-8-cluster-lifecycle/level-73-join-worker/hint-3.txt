@@ -1,0 +1,17 @@
+🔍 HINT 3: The commands
+
+On k8squest-cp, create the command and copy it:
+
+   sudo kubeadm token create --print-join-command
+
+On k8squest-worker, run it with sudo:
+
+   limactl shell k8squest-worker
+   sudo kubeadm join <control-plane-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
+
+Back on k8squest-cp (or with kubectl on this computer):
+
+   kubectl get nodes -w
+   kubectl get pods -A -o wide       # a kube-flannel pod and a kube-proxy pod on the worker
+
+If the join stops with a pre-flight error, read it: the worker was prepared in level 71.

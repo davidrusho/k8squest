@@ -1,0 +1,32 @@
+level: 73
+title: "Join the Worker"
+name: "Join the Worker"
+objective: "Join k8squest-worker to the cluster with kubeadm join, using a token you create and the cluster CA's hash"
+world: "Cluster lifecycle with kubeadm"
+difficulty: "advanced"
+xp: 300
+expected_time: "10-15 minutes"
+concepts:
+  - kubeadm-join
+  - bootstrap-token
+  - ca-cert-hash
+  - worker-node
+description: |
+  The control plane is up (kubeadm init finished, Flannel is installed, the node is
+  Ready), and the worker machine is prepared. But the cluster has one node.
+
+    limactl shell k8squest-cp        # the control plane
+    limactl shell k8squest-worker    # the machine that should join
+
+  The bootstrap token kubeadm init printed has been deleted (tokens expire after
+  24 hours anyway; this one is gone already), so the join command you would have copied
+  is no use. Get what the join needs from the control plane, then run it on the worker.
+
+  When it works, kubectl get nodes shows both machines Ready, and the worker has a
+  Flannel pod. kubectl on this computer talks to the cluster as the context
+  k8squest-lima (or run kubectl on k8squest-cp).
+learning_objectives:
+  - List and create bootstrap tokens with kubeadm token
+  - Build a kubeadm join command from the API address, a token and the CA certificate hash
+  - Explain why the join verifies the CA hash (and what --discovery-token-unsafe-skip-ca-verification gives up)
+  - Run kubeadm join on a prepared machine and watch the node register

@@ -211,6 +211,21 @@ Layer 3: Namespace Isolation (Kubernetes)
 │          logs, etcd snapshot, node loss (cordon/drain)     │
 │          🔥 FINALE (Level 70)                              │
 └─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  WORLD 8: Cluster lifecycle with kubeadm (Levels 71-76)     │
+│  Difficulty: ⭐⭐⭐ Intermediate to Expert                  │
+│  XP: 2,050                                                  │
+│  Status: COMPLETE                                           │
+│  Cluster: lima (two Ubuntu VMs, k8squest-cp and             │
+│           k8squest-worker, created by the engine on first   │
+│           entry; the levels build the kubeadm cluster)      │
+│                                                             │
+│  Topics: node prerequisites, kubeadm init, CNI, kubeadm     │
+│          join, minor upgrade, etcd snapshot and restore,    │
+│          cordon/drain/uncordon with a PodDisruptionBudget   │
+│          🔥 FINALE (Level 76)                              │
+└─────────────────────────────────────────────────────────────┘
 
 ═══════════════════════════════════════════════════════════════════
 
@@ -222,8 +237,10 @@ Layer 3: Namespace Isolation (Kubernetes)
 │ Game Engine         │ Python 3.x                              │
 │ UI Framework        │ rich (Python TUI library)               │
 │ Kubernetes          │ kind (Kubernetes in Docker); World 7    │
-│                     │ uses a 3-node kind cluster              │
-│ Container Runtime   │ Docker Desktop                          │
+│                     │ uses a 3-node kind cluster; World 8 a   │
+│                     │ kubeadm cluster on two Lima VMs         │
+│ Container Runtime   │ Docker Desktop (kind); containerd in    │
+│                     │ the World 8 VMs                         │
 │ CLI Tool            │ kubectl                                 │
 │ Data Format         │ YAML (configs), JSON (progress)         │
 │ Scripting           │ Bash (automation, validation)           │
@@ -239,9 +256,9 @@ Layer 3: Namespace Isolation (Kubernetes)
 ┌────────────────────────────────────────────────────────────────┐
 │  📊 K8sQuest Statistics                                        │
 ├────────────────────────────────────────────────────────────────┤
-│  Total Levels:              70 (7 worlds of 10)               │
-│  Total XP Available:        18,000                            │
-│  Worlds:                    7                                 │
+│  Total Levels:              76 (7 worlds of 10, one of 6)     │
+│  Total XP Available:        20,050                            │
+│  Worlds:                    8                                 │
 │  Lines of Code (Engine):    ~1,500                            │
 │  Lines of Documentation:    ~3,000+                           │
 │  Safety Test Coverage:      20 tests, 100% passing            │
@@ -255,13 +272,14 @@ Created with ❤️ for Kubernetes learners worldwide
 
 ## Clusters per world
 
-`world.yaml` names the cluster a world runs on (`cluster: kind` or `kind-multinode`), and
+`world.yaml` names the cluster a world runs on (`cluster: kind`, `kind-multinode` or `lima`), and
 `engine/level_reset.py` is the one place that maps it to a kubectl context:
 
 | `cluster:` | kind cluster | kubectl context | Config | Created by |
 |---|---|---|---|---|
 | `kind` | `k8squest` | `kind-k8squest` (`k3s-k8squest` with `K8S_CLUSTER_TYPE=k3s`) | `kind/cluster.yaml` | `install.sh` |
 | `kind-multinode` | `k8squest-multinode` | `kind-k8squest-multinode` | `kind/multinode.yaml` | the engine, on first entry to a World 7 level (or `install.sh --multinode`) |
+| `lima` | none: Lima instances `k8squest-cp` and `k8squest-worker` | `k8squest-lima` | `lima/node.yaml` | the engine, on first entry to a World 8 level |
 
 Before deploying a level the engine (`deploy_mission`) calls `ensure_world_cluster`: it
 creates the world's cluster if it is missing and switches `kubectl` to the world's context
@@ -274,3 +292,27 @@ A world may ship an optional `heal.sh` next to `world.yaml`. The engine, `engine
 the harness run it before resetting a level, so a fault an earlier level left in the cluster
 (World 7 breaks kubelets, control-plane manifests, CoreDNS and kindnet) cannot block the reset
 that follows. World 7's `setup.sh` scripts also heal first and only then inject their own fault.
+
+### World 8: the cluster does not exist yet
+
+`cluster: lima` is different from the kind clusters in one way that matters: the game creates two
+virtual machines (`ensure_world_cluster` runs `lima_preflight` first, which says what is missing:
+`limactl`, QEMU, `/dev/kvm`, RAM), but Kubernetes is built on them by the levels. Levels 71 and 72
+start before `kubeadm init`, so there is no API server yet:
+
+- The kubectl context `k8squest-lima` always exists. Until a level has built a cluster it is a
+  placeholder that points at the forwarded API port (`127.0.0.1:16443`, `lima/node.yaml`) and has
+  no credentials, so kubectl answers "connection refused". Once a cluster exists, the level
+  scripts (`export_kubeconfig` in `worlds/world-8-cluster-lifecycle/_shared/lib.sh`) replace it
+  with the cluster's admin credentials.
+- `world_has_api("lima")` asks the API server whether it answers. When it does not, the engine,
+  `engine/reset.py` and `tests/level_harness.py` skip the steps that need one (the connectivity
+  check, applying the `k8squest` namespace, `kubectl delete all`, clearing leftovers) and go
+  straight to `setup.sh`.
+- Players work on the machines with `limactl shell`, and validators run `kubectl` on the control
+  plane through `limactl shell` with its own `admin.conf` (`kc` in the lib), so they never depend
+  on the player's kubeconfig.
+- Every `setup.sh` takes the machines to the state before its level from any state: `kubeadm reset`
+  plus the cleanup kubeadm documents as not done, then only the preparation that level needs.
+  The machines are reused; deleting them (`limactl delete -f k8squest-cp k8squest-worker`) is the
+  fallback and the next level start recreates them.

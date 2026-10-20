@@ -1,0 +1,39 @@
+level: 72
+title: "Bootstrap a Control Plane"
+name: "Bootstrap a Control Plane"
+objective: "Run kubeadm init on k8squest-cp, then install a pod network so the control-plane node turns Ready and CoreDNS starts"
+world: "Cluster lifecycle with kubeadm"
+difficulty: "advanced"
+xp: 300
+expected_time: "15-20 minutes"
+concepts:
+  - kubeadm-init
+  - control-plane
+  - cni
+  - flannel
+description: |
+  Both machines are now prepared (swap off, modules, forwarding, containerd on the
+  systemd cgroup driver), but there is still no cluster. Make k8squest-cp a control
+  plane.
+
+    limactl shell k8squest-cp        (you are an ordinary user there; use sudo)
+
+  1. Initialise the control plane with kubeadm. The pod network add-on you are about
+     to install is Flannel, and its documentation says what kubeadm needs to be told
+     so that the node gets a pod CIDR.
+  2. Give the new cluster a pod network. Flannel's own installation page gives the
+     one-line install (the release is pinned: v0.28.9):
+
+       https://github.com/flannel-io/flannel/releases/download/v0.28.9/kube-flannel.yml
+
+  3. Use kubectl on the machine (copy /etc/kubernetes/admin.conf the way kubeadm
+     tells you to, or point KUBECONFIG at it). The node must be Ready and CoreDNS
+     must be running. CoreDNS stays Pending until a pod network exists.
+
+  Leave the worker alone; it joins in the next level. The check also puts the new
+  cluster's credentials into the kubectl context k8squest-lima on this computer.
+learning_objectives:
+  - Run kubeadm init with --pod-network-cidr for the chosen pod network
+  - Set up kubectl from the admin.conf kubeadm writes
+  - Explain why the node is NotReady and CoreDNS is Pending until a CNI add-on exists
+  - Install a pod network add-on with kubectl apply

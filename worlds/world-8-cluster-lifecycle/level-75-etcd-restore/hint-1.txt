@@ -1,0 +1,17 @@
+🔍 HINT 1: Snapshot first
+
+   limactl shell k8squest-cp
+   sudo -i
+   export KUBECONFIG=/etc/kubernetes/admin.conf
+   kubectl get pods,cm -n k8squest
+
+etcd needs TLS client authentication, so etcdctl needs an endpoint and three file
+paths. Level 70 showed where they come from: the etcd static pod's own manifest.
+
+   grep -E 'listen-client|cert-file|key-file|trusted-ca' /etc/kubernetes/manifests/etcd.yaml
+
+Then etcdctl ... snapshot save <file>, and etcdutl snapshot status <file> -w table to
+check it. (The Kubernetes page "Operating etcd clusters" says etcdctl snapshot status is
+deprecated in favour of etcdutl.)
+
+🤔 Question: why does the snapshot belong somewhere other than /var/lib/etcd?

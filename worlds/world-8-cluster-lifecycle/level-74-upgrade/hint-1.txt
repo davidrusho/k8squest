@@ -1,0 +1,16 @@
+🔍 HINT 1: Look before you change anything
+
+   limactl shell k8squest-cp
+   kubectl get nodes                        # both v1.36.5
+   kubeadm version -o short
+   cat /etc/apt/sources.list.d/kubernetes.list
+   sudo apt-get update && apt-cache madison kubeadm | head -3
+
+The repository file names ONE minor release (v1.36). Until it names the next one,
+apt cannot even see v1.37 packages. The kubeadm page "Changing the Kubernetes package
+repository" says how, and that this is needed only for a MINOR upgrade.
+
+The upgrade order from the kubeadm page: upgrade kubeadm, kubeadm upgrade plan, kubeadm
+upgrade apply, drain, upgrade the kubelet and kubectl, restart the kubelet, uncordon.
+
+🤔 Question: why is kubeadm upgraded before the cluster, and the kubelet after?
