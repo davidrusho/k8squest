@@ -19,6 +19,13 @@ Engine lines mirrored (engine/engine.py):
 Fix step: if the level has a `solution.sh`, it is run (cwd=level dir, same env) INSTEAD of
 applying solution.yaml. The engine never runs solution.sh; it is the scripted proof for
 levels whose fix is a node-side or command action (docs/contributing.md).
+Optional per-level scripts, found by glob in the level directory (docs/contributing.md):
+  wrong-fix-*.sh  a bypass. Reset to the broken state, run it (cwd/env as solution.sh),
+                  assert validate.sh keeps rejecting (exit 1) for WRONG_FIX_WAIT seconds;
+                  any other non-zero exit is ERR.
+  alt-fix-*.sh    another correct fix. Reset to the broken state, run it, assert
+                  validate.sh PASSES (same retry as the solution).
+Each is reported on its own line; any failure makes the run exit non-zero.
 Usage: level_harness.py [--level NAME]... [--world DIR]... [--from-world N] [--repeat N] [--keep-cluster]
   Several --level options run in the order given (to prove context switches both ways).
 """
@@ -46,6 +53,13 @@ NS_YAML = f"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {NS}\n"
 SETTLE_BROKEN = 10      # seconds to let broken state settle before asserting FAIL
 FIX_TIMEOUT = 150       # seconds to wait for validate.sh to pass after the fix
 SETUP_TIMEOUT = 900     # World 8's first setup installs packages on fresh machines
+# A wrong fix is polled this long and fails the moment validate.sh passes. Pods created by a
+# bypass (a deleted pod, a bad probe, a changed image) are Ready or in ImagePullBackOff/
+# CrashLoopBackOff within ~30 s on kind, and a restart-counting validator needs a couple of
+# probe periods, so 60 s catches a bypass that only converges slowly while costing far less
+# than the 150 s the pass path may wait.
+WRONG_FIX_WAIT = 60
+VARIANT_KINDS = ("wrong-fix", "alt-fix")
 # Levels whose validate.sh counts accumulated restarts need longer to turn red.
 SETTLE_OVERRIDE = {"level-12-liveness": 90}
 CTX = context_for("kind")   # the current world's context; set per world in main()
@@ -162,6 +176,56 @@ def solution_applyable(path):
     return False
 
 
+def wait_for_pass(lp, timeout=None):
+    """Polls validate.sh until it passes. Returns ("ok", "") or ("FAIL", last output line)."""
+    deadline = time.time() + (FIX_TIMEOUT if timeout is None else timeout)
+    while True:
+        v = validate(lp)
+        if v.returncode == 0:
+            return "ok", ""
+        if time.time() > deadline:
+            return "FAIL", (v.stdout.strip().splitlines() or [""])[-1][:100]
+        time.sleep(4)
+
+
+def variant_scripts(lp):
+    """The level's wrong-fix-*.sh and alt-fix-*.sh, as [(kind, path)] sorted by name within a kind."""
+    lp = Path(lp)
+    return [(k, p) for k in VARIANT_KINDS for p in sorted(lp.glob(f"{k}-*.sh"))]
+
+
+def run_variant(level, kind, script):
+    """Reset to the broken state, run the script, check validate.sh. Returns (result, note, secs);
+    result is "ok" or a FAIL/ERR string."""
+    t0 = time.time()
+    lp = level.path
+    ok, note = reset(lp)
+    if not ok:
+        return "ERR", note, time.time() - t0
+    time.sleep(SETTLE_OVERRIDE.get(level.name, SETTLE_BROKEN))
+    r = run(["bash", str(script)], cwd=str(lp), timeout=SETUP_TIMEOUT,
+            env={**level_env(lp), "NAMESPACE": NS})
+    if r.returncode:
+        # a script that did not run proves nothing about the validator
+        return "ERR", f"{script.name} rc={r.returncode}: " + (r.stderr or r.stdout).strip()[-120:], time.time() - t0
+    if kind == "alt-fix":
+        result, tail = wait_for_pass(lp)
+        return result, (f"validate: {tail}" if tail else note), time.time() - t0
+    deadline = time.time() + WRONG_FIX_WAIT
+    while True:
+        time.sleep(4)
+        v = validate(lp)
+        if v.returncode == 0:
+            return "FAIL(passes wrong fix)", "validate.sh passed", time.time() - t0
+        if v.returncode != 1:
+            # a validator rejects with exit 1; a crash, a timeout (124) or a missing tool (127)
+            # is not a rejection, so it must not count as the wrong fix being caught
+            tail = ((v.stderr or "").strip() or (v.stdout or "").strip())[-120:]
+            return "ERR", f"validate.sh exited {v.returncode} (expected 1 = rejected): {tail}", time.time() - t0
+        if time.time() > deadline:
+            return "ok", note, time.time() - t0
+
+
 def run_level(level, solution_path=None):
     """Returns dict(b, f, secs, note). b/f in PASS-expected strings."""
     t0 = time.time()
@@ -195,18 +259,9 @@ def run_level(level, solution_path=None):
         r2 = kubectl("replace", "--force", "-f", str(sol), timeout=240)
         res["note"] += "; apply rejected -> replace --force" + (
             "" if r2.returncode == 0 else f" failed: {r2.stderr.strip()[-120:]}")
-    deadline = time.time() + FIX_TIMEOUT
-    while True:
-        v = validate(lp)
-        if v.returncode == 0:
-            res["f"] = "ok"
-            break
-        if time.time() > deadline:
-            res["f"] = "FAIL"
-            tail = (v.stdout.strip().splitlines() or [""])[-1][:100]
-            res["note"] += f"; validate: {tail}"
-            break
-        time.sleep(4)
+    res["f"], tail = wait_for_pass(lp)
+    if tail:
+        res["note"] += f"; validate: {tail}"
     return res, time.time() - t0
 
 
@@ -257,7 +312,7 @@ def _main():
     if a.repeat > 1:
         levels = [wl for wl in levels for _ in range(a.repeat)]
 
-    rows, created_clusters = [], []
+    rows, variant_rows, created_clusters = [], [], []
     ready = {}
     for w, l in levels:
         if w.cluster not in ready:
@@ -278,11 +333,25 @@ def _main():
         res, secs = run_level(l, sp)
         rows.append((l.name, res["b"], res["f"], int(secs), res["note"]))
         print(f"{l.name:40} {res['b']:8} {res['f']:8} {int(secs):4}s {res['note']}", flush=True)
+        for kind, script in variant_scripts(l.path):
+            vres, vnote, vsecs = run_variant(l, kind, script)
+            vname = f"{l.name}/{script.name}"
+            variant_rows.append((vname, kind, vres, int(vsecs), vnote))
+            print(f"{vname:40} {kind:9} {vres:8} {int(vsecs):4}s {vnote}", flush=True)
 
     print()
     print(f"{'level':40} | {'broken->fail':12} | {'fixed->pass':11} | secs | note")
     for r in rows:
         print(f"{r[0]:40} | {r[1]:12} | {r[2]:11} | {r[3]:4} | {r[4]}")
+    if variant_rows:
+        print()
+        print(f"{'script':50} | {'kind':9} | {'result':22} | secs | note")
+        for r in variant_rows:
+            print(f"{r[0]:50} | {r[1]:9} | {r[2]:22} | {r[3]:4} | {r[4]}")
+        print(f"{len(variant_rows)} wrong-fix/alt-fix scripts: "
+              f"{sum(1 for r in variant_rows if r[2] == 'ok')} ok, "
+              f"{sum(1 for r in variant_rows if r[2] != 'ok')} fail")
+    variant_fail = sum(1 for r in variant_rows if r[2] != "ok")
     # an engine abort, or a setup.sh that never deploys the broken state, means
     # the player never sees the intended scenario, so neither counts as ok
     ok = sum(1 for r in rows if r[1] == "ok" and r[2] == "ok"
@@ -296,7 +365,7 @@ def _main():
     if created_clusters and not a.keep_cluster:
         cleanup_created(created_clusters)
     # a skipped level was not proven, so it fails the run as well
-    return 1 if (fail or skip) else 0
+    return 1 if (fail or skip or variant_fail) else 0
 
 
 if __name__ == "__main__":

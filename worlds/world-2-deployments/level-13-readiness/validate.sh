@@ -8,16 +8,20 @@ if [ -z "$HAS_READINESS" ]; then
     exit 1
 fi
 
-# Check if all pods are ready
+# Check if all pods of the current spec are ready (pods of an older ReplicaSet do not count)
 DESIRED=$(kubectl get deployment slow-startup-app -n k8squest -o jsonpath='{.spec.replicas}' 2>/dev/null)
 READY=$(kubectl get deployment slow-startup-app -n k8squest -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+GENERATION=$(kubectl get deployment slow-startup-app -n k8squest -o jsonpath='{.metadata.generation}' 2>/dev/null)
+OBSERVED=$(kubectl get deployment slow-startup-app -n k8squest -o jsonpath='{.status.observedGeneration}' 2>/dev/null)
+UPDATED=$(kubectl get deployment slow-startup-app -n k8squest -o jsonpath='{.status.updatedReplicas}' 2>/dev/null)
+TOTAL=$(kubectl get deployment slow-startup-app -n k8squest -o jsonpath='{.status.replicas}' 2>/dev/null)
 
-if [ "$READY" = "$DESIRED" ]; then
+if [ "$READY" = "$DESIRED" ] && [ "$OBSERVED" = "$GENERATION" ] && [ "$UPDATED" = "$DESIRED" ] && [ "$TOTAL" = "$DESIRED" ]; then
     echo "✅ All $READY/$DESIRED pods are ready"
     echo "   Readiness probe is configured correctly!"
     exit 0
 else
-    echo "⏳ Waiting for pods to be ready: $READY/$DESIRED"
+    echo "⏳ Waiting for pods to be ready: ${READY:-0}/$DESIRED (updated to the current spec: ${UPDATED:-0})"
     echo "   (This may take 20-30 seconds due to startup delay)"
     exit 1
 fi

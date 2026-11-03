@@ -2,17 +2,17 @@
 
 NAMESPACE="k8squest"
 POD_NAME="regular-app"
-NODE_NAME="kind-control-plane"
 
-echo "🔍 VALIDATION STAGE 1: Checking if node is tainted..."
-NODE_TAINTS=$(kubectl get node $NODE_NAME -o jsonpath='{.spec.taints[?(@.key=="dedicated")]}')
-if [ -z "$NODE_TAINTS" ]; then
-    echo "⚠️  Node not tainted yet. Applying taint..."
-    kubectl taint nodes $NODE_NAME dedicated=gpu:NoSchedule --overwrite
-    echo "✅ Node tainted: dedicated=gpu:NoSchedule"
-else
-    echo "✅ Node has taint: dedicated=gpu"
+echo "🔍 VALIDATION STAGE 1: Checking that the setup taint is still on a node..."
+# Read-only: setup.sh puts the taint on the node; the validator never changes the cluster.
+# The node name is not hardcoded (it depends on the cluster name), it is derived from the taint.
+TAINTED_NODES=$(kubectl get nodes -o json | jq -r '.items[] | select(any(.spec.taints[]?; .key=="dedicated" and .value=="gpu" and .effect=="NoSchedule")) | .metadata.name')
+if [ -z "$TAINTED_NODES" ]; then
+    echo "❌ FAILED: No node has the taint dedicated=gpu:NoSchedule"
+    echo "💡 Hint: Don't remove the taint - the pod must tolerate it. Restart the level to put it back"
+    exit 1
 fi
+echo "✅ Node has taint: dedicated=gpu (${TAINTED_NODES//$'\n'/, })"
 
 echo ""
 echo "🔍 VALIDATION STAGE 2: Checking if pod exists..."
@@ -60,6 +60,10 @@ echo "✅ Toleration key matches taint"
 echo ""
 echo "🔍 VALIDATION STAGE 6: Verifying pod scheduled on tainted node..."
 SCHEDULED_NODE=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.spec.nodeName}')
+if ! echo "$TAINTED_NODES" | grep -qxF "$SCHEDULED_NODE"; then
+    echo "❌ FAILED: Pod is on node '$SCHEDULED_NODE', which does not carry the dedicated=gpu taint"
+    exit 1
+fi
 echo "✅ Pod scheduled on node: $SCHEDULED_NODE"
 
 echo ""

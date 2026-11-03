@@ -34,6 +34,8 @@ if a[:2] == ["config", "get-contexts"]:
     print(os.environ.get("STUB_CONTEXTS", "")); sys.exit(0)
 if a[0] == "get" and "--raw" in a and os.environ.get("STUB_API_DOWN"):
     sys.stderr.write("connection refused"); sys.exit(1)
+if a[:2] == ["get", "namespace"]:
+    print(os.environ.get("STUB_NS_JSON", '{"metadata": {}}')); sys.exit(0)
 if a[0] == "get":
     print("\n".join(json.loads(os.environ["STUB_OBJECTS"]).get(a[1], []))); sys.exit(0)
 for k, msg in fail.items():
@@ -113,12 +115,12 @@ class StubKubectl(unittest.TestCase):
         self.env = {"PATH": f"{d}{os.pathsep}{os.environ['PATH']}", "STUB_LOG": str(self.log),
                     "STUB_OBJECTS": json.dumps(OBJECTS), "STUB_CONTEXT": "kind-k8squest"}
         self._saved = {k: os.environ.get(k) for k in list(self.env) + ["K8SQUEST_ALLOW_CONTEXT", "K8S_CLUSTER_TYPE", "STUB_FAIL", "STUB_KIND_CLUSTERS", "STUB_KIND_FAIL", "STUB_DOCKER_RUNNING",
-                                                                "STUB_API_DOWN", "STUB_CONTEXTS", "STUB_LIMA_VERSION", "STUB_LIMA_LIST", "STUB_LIMA_FAIL"]}
+                                                                "STUB_NS_JSON", "STUB_API_DOWN", "STUB_CONTEXTS", "STUB_LIMA_VERSION", "STUB_LIMA_LIST", "STUB_LIMA_FAIL"]}
         os.environ.update(self.env)
         self._saved_limit_file = level_reset.INOTIFY_LIMIT_FILE
         level_reset.INOTIFY_LIMIT_FILE = str(d / "no-such-inotify-file")   # tests never read the host's limit
         for k in ("K8SQUEST_ALLOW_CONTEXT", "K8S_CLUSTER_TYPE", "STUB_FAIL", "STUB_KIND_CLUSTERS", "STUB_KIND_FAIL", "STUB_DOCKER_RUNNING",
-                  "STUB_API_DOWN", "STUB_CONTEXTS", "STUB_LIMA_VERSION", "STUB_LIMA_LIST", "STUB_LIMA_FAIL"):
+                  "STUB_NS_JSON", "STUB_API_DOWN", "STUB_CONTEXTS", "STUB_LIMA_VERSION", "STUB_LIMA_LIST", "STUB_LIMA_FAIL"):
             os.environ.pop(k, None)
 
     def tearDown(self):
@@ -168,6 +170,49 @@ class StubKubectl(unittest.TestCase):
         self.assertIn("forbidden: nope", failed.get("delete resourcequotas", ""))
         self.assertIn("connection refused", failed.get("taint dedicated-", ""))
         self.assertIn("delete resourcequotas", level_reset.describe_failures(list(failed.items())))
+
+    def test_pod_security_labels_are_removed_and_other_labels_kept(self):
+        os.environ["STUB_NS_JSON"] = json.dumps({"metadata": {"labels": {
+            "kubernetes.io/metadata.name": "k8squest",
+            "pod-security.kubernetes.io/enforce": "restricted",
+            "pod-security.kubernetes.io/enforce-version": "latest"}}})
+        self.assertEqual(level_reset.clear_leftovers("k8squest"), [])
+        labels = [c for c in self.calls() if c[:2] == ["label", "namespace"]]
+        self.assertEqual(len(labels), 1)
+        self.assertEqual(sorted(labels[0][3:]), ["pod-security.kubernetes.io/enforce-",
+                                                 "pod-security.kubernetes.io/enforce-version-"])
+        os.environ.pop("STUB_NS_JSON")
+
+    def test_pod_security_labels_untouched_on_foreign_context(self):
+        os.environ["STUB_CONTEXT"] = "some-prod-cluster"
+        os.environ["STUB_NS_JSON"] = json.dumps({"metadata": {"labels": {"pod-security.kubernetes.io/enforce": "restricted"}}})
+        level_reset.clear_leftovers("k8squest")
+        self.assertFalse([c for c in self.calls() if c[:2] == ["label", "namespace"]])
+        self.assertFalse([c for c in self.calls() if c[:2] == ["get", "namespace"]])
+
+    def test_unparseable_namespace_json_is_reported(self):
+        os.environ["STUB_NS_JSON"] = "this is not json"
+        failed = dict(level_reset.clear_leftovers("k8squest"))
+        self.assertIn("read namespace labels", failed)
+        self.assertFalse([c for c in self.calls() if c[:2] == ["label", "namespace"]])
+
+    def test_no_pod_security_labels_means_no_label_call(self):
+        os.environ["STUB_NS_JSON"] = json.dumps({"metadata": {"labels": {"kubernetes.io/metadata.name": "k8squest"}}})
+        level_reset.clear_leftovers("k8squest")
+        self.assertFalse([c for c in self.calls() if c[:2] == ["label", "namespace"]])
+        os.environ.pop("STUB_NS_JSON")
+
+    def test_level_priority_classes_deleted_by_name_on_game_cluster_only(self):
+        level_reset.clear_leftovers("k8squest")
+        pc = [c for c in self.calls() if c[:2] == ["delete", "priorityclass"]]
+        self.assertEqual(len(pc), 1)
+        self.assertEqual(sorted(x for x in pc[0] if not x.startswith("-") and x != "delete" and x != "priorityclass"),
+                         sorted(level_reset.LEVEL_PRIORITY_CLASSES))
+        self.assertFalse(any(x.startswith("system-") for x in pc[0]))
+        os.environ["STUB_CONTEXT"] = "some-prod-cluster"
+        self.log.write_text("")
+        level_reset.clear_leftovers("k8squest")
+        self.assertFalse([c for c in self.calls() if c[:2] == ["delete", "priorityclass"]])
 
     def test_node_edits_skipped_on_foreign_context_and_reported(self):
         os.environ["STUB_CONTEXT"] = "some-prod-cluster"

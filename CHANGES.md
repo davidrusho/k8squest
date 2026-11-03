@@ -6,6 +6,27 @@ As required by section 4(b) of that license, this file states that the files
 listed below have been changed from the upstream versions. Files not listed
 are unchanged from upstream.
 
+## Validators: wrong fixes are rejected, correct fixes are accepted
+
+### Added
+
+- `tests/level_harness.py` - optional `wrong-fix-*.sh` and `alt-fix-*.sh` scripts per level. The harness resets the level to its broken state, runs each script, and checks that `validate.sh` keeps failing for a wrong fix (polled for 60 seconds) and passes for an alternative correct fix. Each script gets its own result line and a summary table, and any failure makes the run exit non-zero. `tests/test_level_harness.py` tests the discovery and the pass/fail logic without a cluster, and `docs/contributing.md` describes both kinds and the rule that validators only read the cluster.
+- 21 `wrong-fix-*.sh` / `alt-fix-*.sh` scripts in levels 8, 9, 10, 11, 12, 13, 15, 16, 22, 23, 28, 42, 47, 49 and 50.
+
+### Modified
+
+- `worlds/world-3-networking/level-28-endpoints` and `level-30-headless` - `validate.sh` no longer builds counts with `grep -c ... || echo 0`, which yields `0` twice when nothing matches and turned a failing check into a script error. Level 28 now also fails (instead of warning) when the pods are not Ready or the Service has no endpoints.
+- `worlds/world-2-deployments/level-11-rollback`, `level-12-liveness`, `level-13-readiness` - `validate.sh` requires the Deployment's current spec to be fully rolled out (`observedGeneration`, `updatedReplicas`, total and ready replicas), so pods of the previous ReplicaSet no longer satisfy it. Level 12 also requires the liveness probe to exist and its path to answer from inside a pod.
+- `worlds/world-2-deployments/level-15-rollout` accepts percentage values for `maxUnavailable`; `level-16-pdb` accepts `maxUnavailable` and percentages and rejects a budget that protects nothing (`minAvailable: 0`).
+- `worlds/world-1-basics/level-8-logs` accepts `POSTGRES_PASSWORD` from `valueFrom`; `level-9-initcontainer` requires the init container to have completed (by a Service appearing or by a command that finishes) and the main container to be Ready; `level-10-namespace` requires the client pod to be Running.
+- `worlds/world-3-networking/level-22-nodeport` - `mission.yaml` now states the required node port (30080), and `validate.sh` also checks the Service type and that it has endpoints. `level-23-dns` runs the lookup and the connection test from inside the client pod instead of reading its logs.
+- `worlds/world-5-security/level-42-securitycontext` accepts pod-level `runAsNonRoot` and `runAsUser`. `level-46-taints-tolerations` - `validate.sh` no longer taints a node itself or hardcodes `kind-control-plane`; it derives the tainted node, and `setup.sh` calls `require_game_context`. `level-47-poddisruptionbudget` fails on `disruptionsAllowed: 0`; `level-49-priorityclass` fails on a PriorityClass that is not above the default and on a Pending pod.
+- `worlds/world-5-security/level-50-chaos-finale` - each of the nine checks now looks at the value that was broken (Role rules and RoleBinding subject, quota against replicas times requests, NetworkPolicy allow rules, PodDisruptionBudget against replicas, security context, priority class value, ready replicas of the current spec) instead of at existence.
+- `engine/level_reset.py` - `clear_leftovers` now removes the `pod-security.kubernetes.io/*` labels from the namespace (level 50 sets `enforce: restricted`, and the namespace apply never removed it, so the pods of every later level were rejected) and deletes the PriorityClasses that levels 49 and 50 create (`high-priority`, `low-priority`, `production-priority`; by exact name, only on the game's cluster), because a class's `value` cannot be changed on an existing class. `tests/test_level_reset.py` covers both.
+- `tests/level_harness.py` - a wrong-fix script counts as rejected only when `validate.sh` exits 1; a crash, a timeout or a missing tool is reported as `ERR`.
+- `worlds/world-3-networking/level-28-endpoints` - Stage 6 no longer uses a filter nested inside a filter, which kubectl's jsonpath rejects. `level-47-poddisruptionbudget` also rejects a budget that protects nothing; `level-23-dns` reads `-hHOST`, `--host=HOST` and quoted hosts; `level-15-rollout` treats an omitted `maxUnavailable` as the 25% default and rejects the `Recreate` strategy.
+- `worlds/world-8-cluster-lifecycle/level-76-maintenance-drain/debrief.md` - states that the validator cannot tell a drain from deleting the pods by hand.
+
 ## Level fixes: six levels now start in the broken state they describe
 
 ### Modified

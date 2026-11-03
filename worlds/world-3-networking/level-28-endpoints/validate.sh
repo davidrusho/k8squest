@@ -28,7 +28,8 @@ echo ""
 # Stage 2: Check if backend pods exist
 echo "Stage 2: Checking backend pods..."
 PODS=$(kubectl get pods -n $NAMESPACE -l app=web --no-headers 2>/dev/null | awk '{print $1}')
-POD_COUNT=$(echo "$PODS" | grep -c "web-app" || echo "0")
+POD_COUNT=$(echo "$PODS" | grep -c "web-app") || true
+POD_COUNT=${POD_COUNT:-0}
 
 if [ "$POD_COUNT" -lt "1" ]; then
     echo "❌ VALIDATION FAILED!"
@@ -101,7 +102,8 @@ TIMEOUT=30
 ELAPSED=0
 
 while [ $ELAPSED -lt $TIMEOUT ]; do
-    READY_COUNT=$(kubectl get pods -n $NAMESPACE -l app=web --field-selector=status.phase=Running 2>/dev/null | grep -c "1/1" || echo "0")
+    READY_COUNT=$(kubectl get pods -n $NAMESPACE -l app=web --field-selector=status.phase=Running 2>/dev/null | grep -c "1/1") || true
+    READY_COUNT=${READY_COUNT:-0}
     
     if [ "$READY_COUNT" -eq "$POD_COUNT" ]; then
         echo "✅ All $POD_COUNT pod(s) are ready"
@@ -112,12 +114,16 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     ELAPSED=$((ELAPSED + 2))
 done
 
-if [ $ELAPSED -ge $TIMEOUT ]; then
-    echo "⚠️  WARNING: Pods not all ready after ${TIMEOUT}s"
-    echo "   This might be normal if pods are still initializing"
+if [ "$READY_COUNT" -ne "$POD_COUNT" ]; then
+    echo "❌ VALIDATION FAILED!"
+    echo ""
+    echo "📋 Issue: Only $READY_COUNT of $POD_COUNT pod(s) are Ready after ${TIMEOUT}s"
     echo ""
     kubectl get pods -n $NAMESPACE -l app=web
     echo ""
+    echo "💡 A readiness probe that never succeeds keeps the pod out of the endpoints"
+    echo "   kubectl describe pod -n $NAMESPACE -l app=web | grep -A10 Readiness"
+    exit 1
 fi
 echo ""
 
@@ -126,13 +132,15 @@ echo "Stage 5: Checking service endpoints..."
 ENDPOINTS=$(kubectl get endpoints $SERVICE_NAME -n $NAMESPACE -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null)
 
 if [ -z "$ENDPOINTS" ]; then
-    echo "⚠️  WARNING: Service has no endpoints yet"
+    echo "❌ VALIDATION FAILED!"
+    echo ""
+    echo "📋 Issue: Service has no endpoints"
     echo "   Pods might still be initializing or readiness probes failing"
     echo ""
     echo "🔍 Debug:"
     echo "   kubectl get endpoints $SERVICE_NAME -n $NAMESPACE"
     echo "   kubectl describe pod -n $NAMESPACE -l app=web | grep -A5 Conditions"
-    echo ""
+    exit 1
 else
     ENDPOINT_COUNT=$(echo "$ENDPOINTS" | wc -w | tr -d ' ')
     echo "✅ Service has $ENDPOINT_COUNT endpoint(s): $ENDPOINTS"
@@ -143,7 +151,8 @@ echo ""
 echo "Stage 6: Verifying endpoints match ready pods..."
 
 # Robust comparison: sort and compare IPs, ignore whitespace/order
-READY_PODS=$(kubectl get pods -n $NAMESPACE -l app=web -o jsonpath='{range .items[?(@.status.conditions[?(@.type=="Ready")].status=="True")]}{.status.podIP}{"\n"}{end}' 2>/dev/null | sort)
+# (one flat filter per pod; a filter nested inside another filter is not supported by kubectl's jsonpath)
+READY_PODS=$(kubectl get pods -n $NAMESPACE -l app=web -o jsonpath='{range .items[*]}{.status.podIP}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null | awk '$2 == "True" {print $1}' | sort)
 ENDPOINTS_SORTED=$(echo "$ENDPOINTS" | tr ' ' '\n' | sort)
 
 if [ -n "$READY_PODS" ] && [ -n "$ENDPOINTS_SORTED" ]; then
@@ -158,7 +167,8 @@ if [ -n "$READY_PODS" ] && [ -n "$ENDPOINTS_SORTED" ]; then
         exit 1
     fi
 else
-    echo "ℹ️  Pods still initializing, endpoints will update when ready"
+    echo "❌ No Ready pods or no endpoints to compare"
+    exit 1
 fi
 echo ""
 

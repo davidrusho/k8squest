@@ -23,7 +23,8 @@ echo "✅ Pod is running"
 echo ""
 echo "🔍 VALIDATION STAGE 3: Verifying runAsNonRoot is enabled..."
 RUN_AS_NON_ROOT=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.spec.containers[0].securityContext.runAsNonRoot}')
-if [ "$RUN_AS_NON_ROOT" != "true" ]; then
+POD_RUN_AS_NON_ROOT=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.spec.securityContext.runAsNonRoot}')
+if [ "$RUN_AS_NON_ROOT" != "true" ] && [ "$POD_RUN_AS_NON_ROOT" != "true" ]; then
     echo "❌ FAILED: runAsNonRoot is not set to true"
     echo "💡 Hint: Add 'runAsNonRoot: true' in securityContext"
     exit 1
@@ -33,6 +34,9 @@ echo "✅ runAsNonRoot enabled"
 echo ""
 echo "🔍 VALIDATION STAGE 4: Verifying runAsUser is set to non-root..."
 RUN_AS_USER=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.spec.containers[0].securityContext.runAsUser}')
+if [ -z "$RUN_AS_USER" ]; then
+    RUN_AS_USER=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.spec.securityContext.runAsUser}')
+fi
 if [ -z "$RUN_AS_USER" ] || [ "$RUN_AS_USER" = "0" ]; then
     echo "❌ FAILED: runAsUser not set or set to root (0)"
     echo "💡 Hint: Add 'runAsUser: 1000' (or any non-zero UID) in securityContext"

@@ -4,6 +4,11 @@
 
 set -e
 
+# shellcheck source=../../_shared/lib.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../_shared/lib.sh"
+# The taint below is cluster-wide state: refuse to run against any other cluster
+require_game_context
+
 NAMESPACE=${1:-k8squest}
 echo "🔧 Setting up Taints and Tolerations level..."
 

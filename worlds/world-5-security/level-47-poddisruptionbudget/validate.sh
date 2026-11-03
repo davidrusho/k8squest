@@ -33,17 +33,33 @@ echo "🔍 VALIDATION STAGE 4: Verifying PDB configuration..."
 MIN_AVAILABLE=$(kubectl get pdb $PDB_NAME -n $NAMESPACE -o jsonpath='{.spec.minAvailable}')
 MAX_UNAVAILABLE=$(kubectl get pdb $PDB_NAME -n $NAMESPACE -o jsonpath='{.spec.maxUnavailable}')
 
+# A PDB value is a number or a percentage; percentages round up
+to_pods() {
+    if [[ "$1" == *"%"* ]]; then
+        echo $(( (${1%\%} * REPLICAS + 99) / 100 ))
+    else
+        echo "$1"
+    fi
+}
+
 if [ -n "$MIN_AVAILABLE" ]; then
     echo "PDB minAvailable: $MIN_AVAILABLE"
-    if [ "$MIN_AVAILABLE" -gt "$REPLICAS" ]; then
-        echo "❌ FAILED: minAvailable ($MIN_AVAILABLE) > replicas ($REPLICAS)"
-        echo "💡 Hint: minAvailable must be ≤ replicas"
-        exit 1
-    fi
+    KEEP_PODS=$(to_pods "$MIN_AVAILABLE")
 elif [ -n "$MAX_UNAVAILABLE" ]; then
     echo "PDB maxUnavailable: $MAX_UNAVAILABLE"
+    KEEP_PODS=$((REPLICAS - $(to_pods "$MAX_UNAVAILABLE")))
 else
     echo "❌ FAILED: PDB has neither minAvailable nor maxUnavailable"
+    exit 1
+fi
+if [ "$KEEP_PODS" -gt "$REPLICAS" ]; then
+    echo "❌ FAILED: the PDB keeps $KEEP_PODS pods available, but there are only $REPLICAS replicas"
+    echo "💡 Hint: minAvailable must be ≤ replicas"
+    exit 1
+fi
+if [ "$KEEP_PODS" -le 0 ]; then
+    echo "❌ FAILED: the PDB protects nothing - it lets all $REPLICAS replicas be evicted at once"
+    echo "💡 Hint: Keep at least one pod available while allowing evictions"
     exit 1
 fi
 echo "✅ PDB configuration is valid"
@@ -57,10 +73,11 @@ if [ -z "$ALLOWED_DISRUPTIONS" ]; then
     ALLOWED_DISRUPTIONS=$(kubectl get pdb $PDB_NAME -n $NAMESPACE -o jsonpath='{.status.disruptionsAllowed}')
 fi
 
-if [ "$ALLOWED_DISRUPTIONS" = "0" ]; then
-    echo "⚠️  WARNING: No disruptions allowed (disruptionsAllowed: 0)"
+if [ -z "$ALLOWED_DISRUPTIONS" ] || [ "$ALLOWED_DISRUPTIONS" = "0" ]; then
+    echo "❌ FAILED: No disruptions allowed (disruptionsAllowed: ${ALLOWED_DISRUPTIONS:-0})"
     echo "   This means node drain would be blocked"
     echo "💡 Hint: Increase replicas or reduce minAvailable"
+    exit 1
 else
     echo "✅ Disruptions allowed: $ALLOWED_DISRUPTIONS"
 fi

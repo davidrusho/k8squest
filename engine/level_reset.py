@@ -5,7 +5,8 @@ Shared level reset for the engine, engine/reset.py and tests/level_harness.py.
 
 `kubectl delete all` leaves behind quotas, limit ranges, network policies, RBAC,
 service accounts, config maps, secrets and PVCs in the namespace, plus node taints
-and labels that earlier levels set. clear_leftovers() removes them so a level
+and labels that earlier levels set, the namespace's pod-security labels and the
+PriorityClasses of levels 49 and 50. clear_leftovers() removes them so a level
 starts from the same state no matter which level was played before it.
 """
 
@@ -21,6 +22,11 @@ from pathlib import Path
 # Node taint / label keys that levels 45, 46 and 50 set on the node
 NODE_TAINT_KEYS = ("dedicated",)
 NODE_LABEL_KEYS = ("accelerator",)
+# Cluster-scoped PriorityClasses that levels 49 and 50 create. `value` cannot be changed on an
+# existing class, so a class left by an earlier run breaks the next apply. Deleted by exact
+# name, and only on the game's own cluster; system classes are never in this list.
+LEVEL_PRIORITY_CLASSES = ("high-priority", "low-priority", "production-priority")
+PSA_LABEL_PREFIX = "pod-security.kubernetes.io/"
 
 
 def _run(args, timeout=120, **kw):
@@ -406,6 +412,23 @@ def on_game_cluster():
     return ctx in KNOWN_CONTEXTS or ctx == expected_context()
 
 
+def _clear_pod_security_labels(namespace):
+    """Level 50 labels the namespace pod-security.kubernetes.io/enforce=restricted, and a
+    namespace apply does not remove a label, so it would reject the pods of every later level."""
+    r = _run(["kubectl", "get", "namespace", namespace, "-o", "json"])
+    if r.returncode:
+        return [("get namespace", _tail(r.stderr))]
+    try:
+        labels = (json.loads(r.stdout).get("metadata") or {}).get("labels") or {}
+    except ValueError:
+        return [("read namespace labels", "kubectl returned output that is not JSON: " + _tail(r.stdout, 80))]
+    keys = sorted(k for k in labels if k.startswith(PSA_LABEL_PREFIX))
+    if not keys:
+        return []
+    r = _run(["kubectl", "label", "namespace", namespace, *[f"{k}-" for k in keys]])
+    return [("remove pod-security labels", _tail(r.stderr))] if r.returncode else []
+
+
 def clear_leftovers(namespace="k8squest"):
     """Remove what `kubectl delete all` leaves in the namespace, and node taints/labels.
 
@@ -424,6 +447,10 @@ def clear_leftovers(namespace="k8squest"):
     if not on_game_cluster():
         failed.append(("node taints/labels", "skipped: kubectl context is not the game cluster"))
         return failed
+    failed += _clear_pod_security_labels(namespace)   # after the gate: never edit a foreign cluster's enforcement labels
+    r = _run(["kubectl", "delete", "priorityclass", "--ignore-not-found", *LEVEL_PRIORITY_CLASSES])
+    if r.returncode:
+        failed.append(("delete priorityclasses", _tail(r.stderr)))
     for verb, keys in (("taint", NODE_TAINT_KEYS), ("label", NODE_LABEL_KEYS)):
         for key in keys:
             r = _run(["kubectl", verb, "nodes", "--all", f"{key}-"])

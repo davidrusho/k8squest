@@ -35,6 +35,10 @@ kubectl get pods -n k8squest -o wide
 5. Do not give pods a toleration for `node.kubernetes.io/unschedulable` unless they are DaemonSet pods: they would land on the node you are draining.
 6. Pods set directly to a node with `nodeName` bypass the scheduler and ignore a cordon.
 
+## 🔎 What the Validator Cannot See
+
+The validator checks the outcome: the budget is intact, every web pod that ran on the worker is gone and was replaced, the worker is Ready and schedulable, and all 4 replicas are available. It cannot tell a drain from deleting those pods by hand and uncordoning afterwards. A cordon leaves no trace once it is lifted, a drain's evictions leave no event that differs from a deletion, and the only record of the cordon (the node's `NodeNotSchedulable` event, written by the kubelet when it next reports status) can be missed when the cordon lasts only a few seconds. Treat the result as "the node was emptied and returned", and do the maintenance with `cordon` and `drain` so the budget paces the evictions.
+
 ## 🏁 World 8 Complete
 
 You prepared machines for Kubernetes, bootstrapped a control plane, joined a worker, upgraded the cluster one minor version, recovered it from an etcd snapshot, and drained a node for maintenance, all with kubeadm on real virtual machines.

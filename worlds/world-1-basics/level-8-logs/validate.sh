@@ -5,7 +5,8 @@ echo "🔍 Checking pod status and stability..."
 POD_STATUS=$(kubectl get pod database-app -n k8squest -o jsonpath='{.status.phase}' 2>/dev/null)
 READY=$(kubectl get pod database-app -n k8squest -o jsonpath='{.status.containerStatuses[0].ready}' 2>/dev/null)
 RESTART_COUNT=$(kubectl get pod database-app -n k8squest -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null)
-PASSWORD_SET=$(kubectl get pod database-app -n k8squest -o jsonpath='{.spec.containers[0].env[?(@.name=="POSTGRES_PASSWORD")].value}' 2>/dev/null)
+# Accept the variable set directly (value) or from a Secret/ConfigMap (valueFrom)
+PASSWORD_SET=$(kubectl get pod database-app -n k8squest -o jsonpath='{.spec.containers[0].env[?(@.name=="POSTGRES_PASSWORD")].name}' 2>/dev/null)
 
 echo "   Pod Phase: $POD_STATUS"
 echo "   Ready: $READY"

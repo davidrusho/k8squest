@@ -65,7 +65,8 @@ echo "📋 Stage 4: Waiting for StatefulSet pods to be ready..."
 TIMEOUT=60
 ELAPSED=0
 while [ $ELAPSED -lt $TIMEOUT ]; do
-    READY_PODS=$(kubectl get pods -n k8squest -l app=web-cluster -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c "True" || echo 0)
+    READY_PODS=$(kubectl get pods -n k8squest -l app=web-cluster -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c "True") || true
+    READY_PODS=${READY_PODS:-0}
     EXPECTED_PODS=$(kubectl get statefulset web -n k8squest -o jsonpath='{.spec.replicas}')
     
     if [ "$READY_PODS" -eq "$EXPECTED_PODS" ]; then
