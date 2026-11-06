@@ -158,8 +158,8 @@ SEC=$(echo "$DEP_JSON" | jq -r '
 read -r RUN_AS_NON_ROOT RUN_AS_USER ALLOW_PRIV CAPS_DROPPED SECCOMP <<< "$SEC"
 if [ "$RUN_AS_NON_ROOT" != "true" ]; then
     echo "❌ runAsNonRoot not true"; ((ERRORS++))
-elif [ "$RUN_AS_USER" = "null" ] || [ "$RUN_AS_USER" = "0" ]; then
-    echo "❌ runAsUser is 0 (root) or not set"; ((ERRORS++))
+elif [ "$RUN_AS_USER" = "0" ]; then
+    echo "❌ runAsUser is 0 (root)"; ((ERRORS++))
 elif [ "$ALLOW_PRIV" != "false" ]; then
     echo "❌ allowPrivilegeEscalation not false"; ((ERRORS++))
 elif [ "$CAPS_DROPPED" != "true" ]; then

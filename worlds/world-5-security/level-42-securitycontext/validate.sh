@@ -37,12 +37,16 @@ RUN_AS_USER=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.spec.contai
 if [ -z "$RUN_AS_USER" ]; then
     RUN_AS_USER=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.spec.securityContext.runAsUser}')
 fi
-if [ -z "$RUN_AS_USER" ] || [ "$RUN_AS_USER" = "0" ]; then
-    echo "❌ FAILED: runAsUser not set or set to root (0)"
-    echo "💡 Hint: Add 'runAsUser: 1000' (or any non-zero UID) in securityContext"
+if [ "$RUN_AS_USER" = "0" ]; then
+    echo "❌ FAILED: runAsUser is set to root (0)"
+    echo "💡 Hint: Use 'runAsUser: 1000' (or any non-zero UID), or leave it unset with an image whose USER is non-root"
     exit 1
 fi
-echo "✅ runAsUser set to $RUN_AS_USER (non-root)"
+if [ -z "$RUN_AS_USER" ]; then
+    echo "✅ runAsUser not set: runAsNonRoot makes the kubelet refuse a root image user, and the pod is running"
+else
+    echo "✅ runAsUser set to $RUN_AS_USER (non-root)"
+fi
 
 echo ""
 echo "🔍 VALIDATION STAGE 5: Verifying privilege escalation is disabled..."
@@ -67,6 +71,6 @@ echo "✅ Container running as UID $ACTUAL_USER (non-root)"
 echo ""
 echo "🎉 SUCCESS! All security validations passed!"
 echo "Your container is now running securely:"
-echo "  - As non-root user (UID $RUN_AS_USER)"
+echo "  - As non-root user (UID $ACTUAL_USER)"
 echo "  - With privilege escalation disabled"
 echo "  - Meeting security best practices"

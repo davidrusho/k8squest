@@ -7,6 +7,17 @@ READY=$(kubectl get pod database-app -n k8squest -o jsonpath='{.status.container
 RESTART_COUNT=$(kubectl get pod database-app -n k8squest -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null)
 # Accept the variable set directly (value) or from a Secret/ConfigMap (valueFrom)
 PASSWORD_SET=$(kubectl get pod database-app -n k8squest -o jsonpath='{.spec.containers[0].env[?(@.name=="POSTGRES_PASSWORD")].name}' 2>/dev/null)
+# ...or from envFrom (configMapRef/secretRef): the referenced object must hold the key (prefix applied) with a value
+if [[ -z "$PASSWORD_SET" ]]; then
+    while IFS=$'\t' read -r KIND REF PREFIX; do
+        [[ -n "$REF" ]] || continue
+        if kubectl get "$KIND" "$REF" -n k8squest -o json 2>/dev/null | jq -e --arg want POSTGRES_PASSWORD --arg p "$PREFIX" \
+            '(.data // {}) | to_entries | any(($p + .key) == $want and .value != "")' >/dev/null 2>&1; then
+            PASSWORD_SET=POSTGRES_PASSWORD
+        fi
+    done < <(kubectl get pod database-app -n k8squest -o json 2>/dev/null | jq -r '.spec.containers[0].envFrom[]?
+        | [(if .configMapRef then "configmap" else "secret" end), (.configMapRef.name // .secretRef.name // ""), (.prefix // "")] | @tsv' 2>/dev/null)
+fi
 
 echo "   Pod Phase: $POD_STATUS"
 echo "   Ready: $READY"

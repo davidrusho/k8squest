@@ -17,7 +17,7 @@ if [ -n "$DESIRED" ] && [ "$OBSERVED" = "$GENERATION" ] && [ "$UPDATED" = "$DESI
 fi
 
 # The liveness probe must still exist and its HTTP endpoint must answer with a success status
-# when requested from inside a running pod (a probe that is removed or still points at a 404 fails)
+# when requested from the API server through the pod proxy (a probe that is removed or still points at a 404 fails)
 PROBE=$(kubectl get deployment api-server -n k8squest -o jsonpath='{.spec.template.spec.containers[0].livenessProbe}' 2>/dev/null)
 PROBE_PATH=$(kubectl get deployment api-server -n k8squest -o jsonpath='{.spec.template.spec.containers[0].livenessProbe.httpGet.path}' 2>/dev/null)
 PROBE_PORT=$(kubectl get deployment api-server -n k8squest -o jsonpath='{.spec.template.spec.containers[0].livenessProbe.httpGet.port}' 2>/dev/null)
@@ -29,7 +29,8 @@ elif [ -n "$PROBE_PATH" ]; then
         ''|*[!0-9]*) PROBE_PORT=$(kubectl get deployment api-server -n k8squest -o jsonpath='{.spec.template.spec.containers[0].ports[0].containerPort}' 2>/dev/null) ;;
     esac
     POD=$(kubectl get pods -n k8squest -l app=api -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' 2>/dev/null | awk '{print $1}')
-    if [ -z "$POD" ] || ! kubectl exec "$POD" -n k8squest -- wget -q -O /dev/null "http://localhost:${PROBE_PORT:-80}${PROBE_PATH}" >/dev/null 2>&1; then
+    # Request through the API server's pod proxy (read-only GET): needs no wget or shell in the player's image
+    if [ -z "$POD" ] || ! kubectl get --raw "/api/v1/namespaces/k8squest/pods/${POD}:${PROBE_PORT:-80}/proxy${PROBE_PATH}" >/dev/null 2>&1; then
         ENDPOINT="probe path ${PROBE_PATH} does not return a success status"
     fi
 fi
