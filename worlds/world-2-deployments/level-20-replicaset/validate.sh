@@ -5,6 +5,22 @@ if kubectl get deployment web-app -n k8squest &>/dev/null; then
     READY=$(kubectl get deployment web-app -n k8squest -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
     DESIRED=$(kubectl get deployment web-app -n k8squest -o jsonpath='{.spec.replicas}' 2>/dev/null)
     
+    # No ReplicaSet outside the Deployment may keep running pods (the old standalone one included)
+    if ! RS_JSON=$(kubectl get replicaset -n k8squest -o json 2>/dev/null); then
+        echo "❌ Could not list the ReplicaSets (kubectl get replicaset failed)"
+        exit 1
+    fi
+    STRAY=$(echo "$RS_JSON" | jq -r '[.items[]
+        | select(any(.metadata.ownerReferences[]?; .kind == "Deployment" and .name == "web-app") | not)
+        | select((.spec.replicas // 0) > 0 or (.status.replicas // 0) > 0)
+        | .metadata.name] | join(" ")')
+    if [ -n "$STRAY" ]; then
+        echo "❌ ReplicaSet(s) not managed by the Deployment still run pods: $STRAY"
+        echo "   Delete the standalone ReplicaSet once the Deployment replaces it"
+        echo "💡 kubectl get replicaset -n k8squest"
+        exit 1
+    fi
+
     if [ "$READY" = "$DESIRED" ]; then
         echo "✅ Using Deployment (correct approach)"
         echo "   Ready: $READY/$DESIRED pods"

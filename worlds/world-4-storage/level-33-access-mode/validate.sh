@@ -59,21 +59,35 @@ fi
 echo "✅ Deployment exists"
 
 echo ""
-echo "ℹ️  Pod Status (informational only):"
-READY_PODS=$(kubectl get deployment "$DEPLOYMENT" -n "$NAMESPACE" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
-DESIRED_PODS=$(kubectl get deployment "$DEPLOYMENT" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}' 2>/dev/null)
-echo "   Ready: $READY_PODS/$DESIRED_PODS pods"
-
-if [ "$READY_PODS" = "$DESIRED_PODS" ]; then
-    echo "   ✅ All pods are running"
-    echo ""
-    echo "   💡 Note: In Kind (single-node), pods run even with ReadWriteOnce."
-    echo "      Validation checks CONFIGURATION correctness, not runtime behavior."
-    echo "      In production multi-node clusters, ReadWriteOnce would prevent"
-    echo "      pods on different nodes from mounting the volume!"
-else
-    echo "   ⚠️  Not all pods are ready yet (this doesn't affect validation)"
-fi
+echo "🔍 Stage 6: Are all the Deployment's pods ready?"
+READY_WAIT=${LEVEL33_READY_WAIT:-60}
+END=$((SECONDS + READY_WAIT))
+while true; do
+    DEP_JSON=$(kubectl get deployment "$DEPLOYMENT" -n "$NAMESPACE" -o json 2>/dev/null)
+    DESIRED_PODS=$(echo "$DEP_JSON" | jq -r '.spec.replicas // 0' 2>/dev/null)
+    READY_PODS=$(echo "$DEP_JSON" | jq -r '.status.readyReplicas // 0' 2>/dev/null)
+    UPDATED_PODS=$(echo "$DEP_JSON" | jq -r '.status.updatedReplicas // 0' 2>/dev/null)
+    TOTAL_PODS=$(echo "$DEP_JSON" | jq -r '.status.replicas // 0' 2>/dev/null)
+    GENERATION=$(echo "$DEP_JSON" | jq -r '.metadata.generation' 2>/dev/null)
+    OBSERVED=$(echo "$DEP_JSON" | jq -r '.status.observedGeneration // 0' 2>/dev/null)
+    if [ "${DESIRED_PODS:-0}" -gt 0 ] && [ "$READY_PODS" = "$DESIRED_PODS" ] && [ "$UPDATED_PODS" = "$DESIRED_PODS" ] \
+        && [ "$TOTAL_PODS" = "$DESIRED_PODS" ] && [ "$OBSERVED" = "$GENERATION" ]; then
+        break
+    fi
+    if [ $SECONDS -ge $END ]; then
+        echo "❌ Not all pods are ready: ${READY_PODS:-0}/${DESIRED_PODS:-0} ready, ${UPDATED_PODS:-0} updated"
+        echo "💡 kubectl get pods -n $NAMESPACE -l app=web ; kubectl describe pod -l app=web -n $NAMESPACE"
+        exit 1
+    fi
+    echo "   Waiting for pods... (${READY_PODS:-0}/${DESIRED_PODS:-0} ready)"
+    sleep 3
+done
+echo "✅ All $READY_PODS pods are ready"
+echo ""
+echo "   💡 Note: In Kind (single-node), pods run even with ReadWriteOnce, so the"
+echo "      access-mode stages above check CONFIGURATION correctness, not runtime behavior."
+echo "      In production multi-node clusters, ReadWriteOnce would prevent"
+echo "      pods on different nodes from mounting the volume!"
 
 echo ""
 echo "🎉 SUCCESS! Storage configured correctly with ReadWriteMany!"

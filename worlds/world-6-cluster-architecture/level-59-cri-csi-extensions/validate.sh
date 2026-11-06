@@ -25,7 +25,7 @@ echo "✅ runtimeClassName: $RC"
 
 echo ""
 echo "🔍 Stage 3: Is the pod Running and Ready?"
-if ! kubectl wait --for=condition=Ready pod -l app=ledger -n "$NAMESPACE" --timeout=5s >/dev/null 2>&1; then
+if ! kubectl wait --for=condition=Ready pod -l app=ledger -n "$NAMESPACE" --timeout=60s >/dev/null 2>&1; then
     echo "❌ The ledger pod is not Ready"
     kubectl get pods -n "$NAMESPACE" -l app=ledger
     echo "💡 kubectl describe pod -l app=ledger -n $NAMESPACE   (read the Events)"

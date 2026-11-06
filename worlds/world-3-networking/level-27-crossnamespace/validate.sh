@@ -82,15 +82,17 @@ echo ""
 echo "Stage 5: Checking DNS configuration in frontend pod..."
 POD_COMMAND=$(kubectl get pod $FRONTEND_POD -n $FRONTEND_NAMESPACE -o jsonpath='{.spec.containers[0].command[2]}')
 
-if echo "$POD_COMMAND" | grep -q "api-service.backend-ns"; then
-    if echo "$POD_COMMAND" | grep -q "api-service.backend-ns.svc.cluster.local"; then
+# Whole comment lines do not count: a real wget/curl must appear, and it must name the backend service
+CMD_LIVE=$(echo "$POD_COMMAND" | grep -Ev '^[[:space:]]*#')
+if echo "$CMD_LIVE" | grep -Eiq '(^|[^[:alnum:]_-])(wget|curl)([^[:alnum:]_-]|$)' && echo "$CMD_LIVE" | grep -Fiq "api-service.backend-ns"; then
+    if echo "$CMD_LIVE" | grep -Fiq "api-service.backend-ns.svc.cluster.local"; then
         echo "✅ Using full FQDN: api-service.backend-ns.svc.cluster.local (best practice)"
-    elif echo "$POD_COMMAND" | grep -q "api-service.backend-ns.svc"; then
+    elif echo "$CMD_LIVE" | grep -Fiq "api-service.backend-ns.svc"; then
         echo "✅ Using FQDN: api-service.backend-ns.svc (works)"
-    elif echo "$POD_COMMAND" | grep -q "api-service.backend-ns"; then
+    else
         echo "✅ Using namespace-qualified name: api-service.backend-ns (works)"
     fi
-elif echo "$POD_COMMAND" | grep -q "http://api-service[^.]"; then
+elif echo "$CMD_LIVE" | grep -Eiq "http://api-service([^.]|$)"; then
     echo "❌ VALIDATION FAILED!"
     echo ""
     echo "📋 Issue: Frontend is using SHORT NAME 'api-service' instead of FQDN"
@@ -109,28 +111,40 @@ elif echo "$POD_COMMAND" | grep -q "http://api-service[^.]"; then
     echo "🔧 Edit the frontend pod command to use:"
     echo "   wget -q -O- http://api-service.backend-ns.svc.cluster.local"
     exit 1
+else
+    echo "❌ VALIDATION FAILED!"
+    echo ""
+    echo "📋 Issue: The frontend command does not use wget or curl on api-service.backend-ns"
+    echo ""
+    echo "💡 Fix: the frontend must really request api-service.backend-ns.svc.cluster.local, not print the answer itself"
+    exit 1
 fi
 echo ""
 
-# Stage 6: Wait for frontend to make requests
-echo "Stage 6: Waiting for frontend to attempt connection (10 seconds)..."
-sleep 10
-echo "✅ Frontend should have attempted API calls"
+# Stage 6: Prove the connection from inside the frontend pod (a log line can be echoed by any pod)
+echo "Stage 6: Requesting the backend from the frontend pod..."
+WAIT=${LEVEL27_WAIT:-30}
+END=$((SECONDS + WAIT))
+while true; do
+    if OUT=$(kubectl exec $FRONTEND_POD -n $FRONTEND_NAMESPACE -- wget -q -T 5 -O- http://api-service.backend-ns.svc.cluster.local 2>&1); then
+        break
+    fi
+    [ $SECONDS -ge $END ] && break
+    sleep 3
+done
 echo ""
 
-# Stage 7: Check frontend logs for successful response
+# Stage 7: Check the answer came from the backend
 echo "Stage 7: Checking frontend connectivity..."
-LOGS=$(kubectl logs $FRONTEND_POD -n $FRONTEND_NAMESPACE --tail=20 2>&1)
-
-if echo "$LOGS" | grep -q "API Response from backend-ns"; then
+if echo "$OUT" | grep -q "API Response from backend-ns"; then
     echo "✅ Frontend successfully received response from backend!"
-elif echo "$LOGS" | grep -iq "could not resolve host\|bad address\|name or service not known"; then
+elif echo "$OUT" | grep -iq "could not resolve host\|bad address\|name or service not known"; then
     echo "❌ VALIDATION FAILED!"
     echo ""
     echo "📋 Issue: DNS resolution failed (cannot find service)"
     echo ""
-    echo "🔍 Frontend logs show DNS errors:"
-    echo "$LOGS" | tail -5
+    echo "🔍 The request from the frontend pod printed:"
+    echo "$OUT" | tail -5
     echo ""
     echo "💡 Hint: The service name doesn't resolve in the frontend's namespace"
     echo "💡 Hint: Use FQDN: api-service.backend-ns.svc.cluster.local"
@@ -140,13 +154,13 @@ elif echo "$LOGS" | grep -iq "could not resolve host\|bad address\|name or servi
     echo "   kubectl exec $FRONTEND_POD -n $FRONTEND_NAMESPACE -- nslookup api-service"
     echo "   kubectl exec $FRONTEND_POD -n $FRONTEND_NAMESPACE -- nslookup api-service.backend-ns.svc.cluster.local"
     exit 1
-elif echo "$LOGS" | grep -iq "connection refused\|connection timed out"; then
+else
     echo "❌ VALIDATION FAILED!"
     echo ""
     echo "📋 Issue: Connection to backend failed"
     echo ""
-    echo "🔍 Frontend logs show connection errors:"
-    echo "$LOGS" | tail -5
+    echo "🔍 The request from the frontend pod printed:"
+    echo "$OUT" | tail -5
     echo ""
     echo "💡 Hint: DNS resolved but connection failed. Check backend service and pod"
     echo ""
@@ -154,14 +168,6 @@ elif echo "$LOGS" | grep -iq "connection refused\|connection timed out"; then
     echo "   kubectl get service $BACKEND_SERVICE -n $BACKEND_NAMESPACE"
     echo "   kubectl get endpoints $BACKEND_SERVICE -n $BACKEND_NAMESPACE"
     echo "   kubectl get pods -n $BACKEND_NAMESPACE"
-    exit 1
-else
-    echo "⚠️  WARNING: No clear success or failure in logs yet"
-    echo "   Recent logs:"
-    echo "$LOGS" | tail -5
-    echo ""
-    echo "💡 Hint: Wait a bit longer or check logs manually:"
-    echo "   kubectl logs $FRONTEND_POD -n $FRONTEND_NAMESPACE -f"
     exit 1
 fi
 echo ""

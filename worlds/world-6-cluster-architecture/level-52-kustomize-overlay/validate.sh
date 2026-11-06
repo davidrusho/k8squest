@@ -48,7 +48,7 @@ echo "✅ Cluster matches the rendered overlay"
 
 echo ""
 echo "🔍 Stage 4: Are all replicas ready?"
-if ! kubectl rollout status deployment/"$DEPLOY" -n "$NAMESPACE" --timeout=5s >/dev/null 2>&1; then
+if ! kubectl rollout status deployment/"$DEPLOY" -n "$NAMESPACE" --timeout=60s >/dev/null 2>&1; then
     echo "❌ Rollout not finished yet"
     exit 1
 fi
