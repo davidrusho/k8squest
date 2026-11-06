@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CKA practice exam</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <div id="top-left">
+    <span class="brand">CKA</span>
+    <span class="candidate">candidate</span>
+    <button class="icon" id="btn-help" title="Help: open the Readme tab" aria-label="Help">?</button>
+    <button class="icon" id="btn-globe" title="Language: English" aria-label="Language">&#127760;</button>
+  </div>
+  <div id="top-right">
+    <nav id="tabs" role="tablist">
+      <button role="tab" id="tab-readme" data-tab="readme" class="tab active" aria-selected="true">Readme</button>
+      <button role="tab" id="tab-desktop" data-tab="desktop" class="tab" aria-selected="false">Remote Desktop</button>
+    </nav>
+    <span class="spacer"></span>
+    <button id="btn-end" class="end">End exam</button>
+    <div class="cog-wrap">
+      <button class="icon" id="btn-cog" aria-label="Settings" aria-haspopup="true">&#9881;</button>
+      <div id="cog-menu" hidden>
+        <button data-act="reset-width">Reset panel width</button>
+        <button data-act="reload-desktop">Reload remote desktop</button>
+        <button data-act="open-desktop">Open remote desktop in a new window</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <section id="content" aria-label="Content panel">
+    <div id="timerbar" class="timer green"><span id="timer-text">Time remaining: 7 min 30 s</span></div>
+    <div id="taskbar">
+      <div class="dropdown">
+        <button id="task-select" aria-haspopup="listbox"><span class="hamb">&#9776;</span> <span id="task-label">Task 1 of 16</span> <span class="caret">&#9662;</span></button>
+        <ul id="task-list" role="listbox" hidden></ul>
+      </div>
+      <button id="btn-next-arrow" class="arrow" title="Next task" aria-label="Next task">&rarr;</button>
+      <span id="sync-warn" class="syncwarn" hidden></span>
+      <span id="task-domain" class="domain"></span>
+    </div>
+    <div id="body">
+      <div id="screen"></div>
+    </div>
+    <footer id="actions">
+      <button id="btn-flag" class="secondary">Flag this to return to later</button>
+      <button id="btn-satisfied" class="primary">I am satisfied, next &rarr;</button>
+    </footer>
+  </section>
+  <div id="divider" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+  <section id="right" aria-label="Environment">
+    <div id="pane-readme" class="pane">
+      <div class="readme">
+        <h2>Exam environment</h2>
+        <p>This is a practice version of the CKA exam interface. The task panel is on the left; this area holds the environment.</p>
+        <h3>How to work</h3>
+        <ul>
+          <li>Open the <b>Remote Desktop</b> tab. Open a terminal there. You start on the base host, which has no <code>kubectl</code>.</li>
+          <li>Each task names the host to use: <code>ssh cka1</code>, <code>ssh cka2</code> or <code>ssh cka3</code>. All three hosts use the same cluster.</li>
+          <li>Each task has its own namespace, <code>exam-tNN</code>. The task text gives it.</li>
+          <li>Documentation allowed: kubernetes.io/docs, as on the real exam.</li>
+        </ul>
+        <h3>Differences from the real exam</h3>
+        <ul>
+          <li><b>Check</b> grades the current task at once and shows the validator output. A pass is recorded either way.</li>
+          <li><b>Timer per task, 7.5 minutes</b> (120 minutes / 16 tasks). A task's clock runs only while that task is shown and this page is visible. Time accumulates across visits.</li>
+          <li>You can keep working after the clock runs out. A pass after that is recorded as <i>passed over time</i> and does <b>not count</b>. Redo that task within 7.5 minutes in a later session.</li>
+          <li>Results are kept across sessions. <b>End exam</b> shows what counted and offers a new session with the missed tasks first.</li>
+          <li>The first time you open a task its broken environment is built. That can take up to a minute for some tasks.</li>
+        </ul>
+      </div>
+    </div>
+    <div id="pane-desktop" class="pane" hidden>
+      <iframe id="desktop" title="Remote Desktop" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+    </div>
+    <div id="drag-shield" hidden></div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

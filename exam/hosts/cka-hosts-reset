@@ -1,0 +1,34 @@
+#!/bin/bash
+# Reset the CKA exam-practice hosts (cka1..cka3) to a clean state (T-615).
+set -eu
+SRC_KUBE=/home/david/.kube/config
+CTX=kind-k8squest
+# Give the exam hosts a kubeconfig that holds only $CTX, with it as current-context, so a context switch
+# in david's own config (the K8sQuest engine does that) cannot leak into the exam. The file carries
+# credentials: build it once in a 0600 temp file, never print it, remove it on exit.
+PINNED=$(mktemp)
+trap 'rm -f "$PINNED"' EXIT
+KUBECONFIG="$SRC_KUBE" kubectl config view --minify --flatten --context "$CTX" > "$PINNED"
+[ -s "$PINNED" ] || { echo "could not build a kubeconfig pinned to $CTX" >&2; exit 1; }
+for n in 1 2 3; do
+  u=cka$n
+  h=$(getent passwd "$u" | cut -d: -f6)
+  [ -n "$h" ] || { echo "no user $u" >&2; exit 1; }
+  {
+    cat /etc/skel/.bashrc
+    cat <<'BLOCK'
+
+# Exam host defaults (T-615): the CKA exam tips page says every ssh host has
+# "kubectl with k alias and Bash autocompletion" preinstalled. Mirror that here.
+source <(kubectl completion bash)
+alias k=kubectl
+complete -o default -F __start_kubectl k
+BLOCK
+  } > "$h/.bashrc.new"
+  chown "$u:$u" "$h/.bashrc.new"; chmod 644 "$h/.bashrc.new"
+  mv -f "$h/.bashrc.new" "$h/.bashrc"
+  rm -f "$h/.nanorc" "$h/.bash_history" "$h/.vimrc"
+  install -d -m 700 -o "$u" -g "$u" "$h/.kube"
+  install -m 600 -o "$u" -g "$u" "$PINNED" "$h/.kube/config"
+done
+echo "cka-hosts-reset: done"
