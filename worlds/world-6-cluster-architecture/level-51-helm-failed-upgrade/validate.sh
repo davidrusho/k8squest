@@ -30,7 +30,17 @@ if ! kubectl rollout status deployment/"$RELEASE" -n "$NAMESPACE" --timeout=5s >
     kubectl get pods -n "$NAMESPACE" -l app="$RELEASE"
     exit 1
 fi
-BAD=$(kubectl get pods -n "$NAMESPACE" -l app="$RELEASE" -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | grep -vc "^$GOOD_IMAGE$")
+IMAGES=$(kubectl get pods -n "$NAMESPACE" -l app="$RELEASE" -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' 2>/dev/null)
+if [ $? -ne 0 ]; then
+    echo "❌ Could not list the pods of release '$RELEASE' (kubectl get pods failed)"
+    exit 1
+fi
+if [ -z "$IMAGES" ]; then
+    echo "❌ No pods found for release '$RELEASE'"
+    echo "💡 kubectl get pods -n $NAMESPACE -l app=$RELEASE"
+    exit 1
+fi
+BAD=$(printf '%s\n' "$IMAGES" | grep -vc "^$GOOD_IMAGE$")
 if [ "$BAD" != "0" ]; then
     echo "❌ $BAD pod(s) are not running $GOOD_IMAGE yet"
     exit 1

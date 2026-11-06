@@ -49,15 +49,26 @@ if [ "$(kubectl get deployment shop -n "$NAMESPACE" -o jsonpath='{.spec.replicas
     echo "❌ The shop Deployment must keep 4 replicas"
     exit 1
 fi
-PODS=$(pod_nodes "$NAMESPACE" app=shop)
+ROWS=$(pod_rows "$NAMESPACE" app=shop)
+if [ $? -ne 0 ]; then
+    echo "❌ Could not list the shop pods (kubectl get pods failed)"
+    exit 1
+fi
+if [ -z "$ROWS" ]; then
+    echo "❌ No shop pods found"
+    echo "💡 kubectl get pods -n $NAMESPACE -o wide"
+    exit 1
+fi
+PODS=$(printf '%s\n' "$ROWS" | awk -F'|' '$4 == "" {print $1 " " $2}')
 ON_LOST=$(printf '%s\n' "$PODS" | grep -c " $LOST\$")
 if [ "$ON_LOST" != "0" ]; then
     echo "❌ $ON_LOST shop pod(s) are still assigned to $LOST (pods that are Terminating do not count)"
     echo "💡 kubectl get pods -n $NAMESPACE -o wide"
     exit 1
 fi
-RUNNING=$(running_nodes "$NAMESPACE" app=shop | grep -c .)
-ELSEWHERE=$(running_nodes "$NAMESPACE" app=shop | grep -c '^k8squest-multinode-worker2$')
+RUNNING_NODES=$(printf '%s\n' "$ROWS" | awk -F'|' '$4 == "" && $3 == "Running" {print $2}')
+RUNNING=$(printf '%s\n' "$RUNNING_NODES" | grep -c .)
+ELSEWHERE=$(printf '%s\n' "$RUNNING_NODES" | grep -c '^k8squest-multinode-worker2$')
 if [ "$RUNNING" != "4" ] || [ "$ELSEWHERE" != "4" ]; then
     echo "❌ $ELSEWHERE of 4 shop pods are Running on k8squest-multinode-worker2 ($RUNNING Running in total)"
     exit 1

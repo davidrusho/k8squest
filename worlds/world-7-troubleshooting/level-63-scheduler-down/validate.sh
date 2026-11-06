@@ -25,7 +25,17 @@ if [ "${READYR:-0}" != "3" ]; then
     echo "💡 kubectl get pods -n $NAMESPACE -o wide"
     exit 1
 fi
-NODELESS=$(kubectl get pods -n "$NAMESPACE" -l app=checkout -o jsonpath='{range .items[*]}{.spec.nodeName}{"\n"}{end}' | grep -c '^$')
+NODES=$(kubectl get pods -n "$NAMESPACE" -l app=checkout -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.spec.nodeName}{"\n"}{end}' 2>/dev/null)
+if [ $? -ne 0 ]; then
+    echo "❌ Could not list the checkout pods (kubectl get pods failed)"
+    exit 1
+fi
+if [ -z "$NODES" ]; then
+    echo "❌ No checkout pods found"
+    echo "💡 kubectl get pods -n $NAMESPACE -o wide"
+    exit 1
+fi
+NODELESS=$(printf '%s\n' "$NODES" | awk -F'|' '$2 == ""' | grep -c .)
 if [ "$NODELESS" != "0" ]; then
     echo "❌ $NODELESS checkout pod(s) have no node"
     exit 1
