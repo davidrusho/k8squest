@@ -91,55 +91,67 @@ echo ""
 # Stage 5: Verify per-pod DNS resolution
 echo "📋 Stage 5: Testing per-pod DNS resolution..."
 
-# Deploy a test pod to check DNS
-kubectl run -n k8squest dns-test --image=busybox:1.28 --restart=Never --rm -i --command -- sleep 1 &>/dev/null || true
-kubectl delete pod dns-test -n k8squest --ignore-not-found=true &>/dev/null
+# Per-pod DNS is published for the Service named in spec.serviceName
+SERVICE_NAME=$(kubectl get statefulset web -n k8squest -o jsonpath='{.spec.serviceName}')
+if [ "$SERVICE_NAME" != "web-cluster" ]; then
+    echo -e "${RED}❌ StatefulSet serviceName is '${SERVICE_NAME:-none}' (expected: web-cluster)${NC}"
+    echo ""
+    echo "💡 Per-pod DNS names come from the Service that spec.serviceName points to."
+    exit 1
+fi
 
-# Create test pod
-cat <<EOF | kubectl apply -f - &>/dev/null
-apiVersion: v1
-kind: Pod
-metadata:
-  name: dns-test
-  namespace: k8squest
-spec:
-  containers:
-  - name: busybox
-    image: busybox:1.28
-    command: ['sleep', '3600']
-EOF
+# hostAliases would answer the lookups from /etc/hosts instead of cluster DNS
+if [ -n "$(kubectl get statefulset web -n k8squest -o jsonpath='{.spec.template.spec.hostAliases}')" ]; then
+    echo -e "${RED}❌ The StatefulSet pod template defines hostAliases, so names are answered from /etc/hosts, not cluster DNS${NC}"
+    echo ""
+    echo "💡 Remove hostAliases and let the headless Service provide the per-pod names."
+    exit 1
+fi
 
-# Wait for test pod to be ready
-echo "   Starting DNS test pod..."
-kubectl wait --for=condition=Ready pod/dns-test -n k8squest --timeout=30s &>/dev/null
-
-# Test DNS for each StatefulSet pod
+# Resolve each per-pod name from inside an existing StatefulSet pod (read-only: nothing is created).
+# A pod's own name is written into its /etc/hosts by the kubelet, so ask a DIFFERENT pod:
+# web-0's name from web-1, every other name from web-0.
 POD_COUNT=$(kubectl get statefulset web -n k8squest -o jsonpath='{.spec.replicas}')
 DNS_SUCCESS=true
+if [ "${POD_COUNT:-0}" -lt 2 ]; then
+    echo -e "${RED}❌ StatefulSet has ${POD_COUNT:-0} replica(s); this level expects 3${NC}"
+    echo ""
+    echo "💡 Per-pod DNS is checked from one pod to another, so at least two pods are needed."
+    exit 1
+fi
+
+# Right after the Service becomes headless the per-pod records can lag, so each lookup is retried
+DNS_WAIT=${LEVEL30_DNS_WAIT:-30}
+DNS_INTERVAL=${LEVEL30_DNS_INTERVAL:-3}
 
 for i in $(seq 0 $((POD_COUNT - 1))); do
     POD_DNS="web-$i.web-cluster.k8squest.svc.cluster.local"
     echo "   Testing: $POD_DNS"
-    
-    if ! kubectl exec -n k8squest dns-test -- nslookup "$POD_DNS" &>/dev/null; then
-        echo -e "${RED}   ❌ DNS resolution failed for $POD_DNS${NC}"
-        DNS_SUCCESS=false
-    else
-        # Verify it resolves to the correct pod
-        RESOLVED_IP=$(kubectl exec -n k8squest dns-test -- nslookup "$POD_DNS" 2>/dev/null | grep "Address" | tail -n1 | awk '{print $3}')
+    EXEC_POD=web-0
+    [ "$i" = 0 ] && EXEC_POD=web-1
+
+    END=$((SECONDS + DNS_WAIT))
+    while true; do
+        FAIL_MSG=""
         POD_IP=$(kubectl get pod "web-$i" -n k8squest -o jsonpath='{.status.podIP}')
-        
-        if [ "$RESOLVED_IP" == "$POD_IP" ]; then
-            echo -e "${GREEN}   ✓ $POD_DNS → $POD_IP${NC}"
+        if ! RESOLVED=$(kubectl exec -n k8squest "$EXEC_POD" -- getent ahosts "$POD_DNS" 2>/dev/null); then
+            FAIL_MSG="DNS resolution failed for $POD_DNS"
+        elif [ -n "$POD_IP" ] && echo "$RESOLVED" | awk '{print $1}' | grep -qxF "$POD_IP"; then
+            break
         else
-            echo -e "${RED}   ❌ DNS mismatch: resolved to $RESOLVED_IP, expected $POD_IP${NC}"
-            DNS_SUCCESS=false
+            FAIL_MSG="DNS mismatch: resolved to $(echo "$RESOLVED" | awk '{print $1}' | sort -u | tr '\n' ' '), expected ${POD_IP:-no pod IP}"
         fi
+        [ $SECONDS -ge $END ] && break
+        sleep "$DNS_INTERVAL"
+    done
+
+    if [ -z "$FAIL_MSG" ]; then
+        echo -e "${GREEN}   ✓ $POD_DNS → $POD_IP${NC}"
+    else
+        echo -e "${RED}   ❌ $FAIL_MSG${NC}"
+        DNS_SUCCESS=false
     fi
 done
-
-# Cleanup test pod
-kubectl delete pod dns-test -n k8squest --ignore-not-found=true &>/dev/null
 
 if [ "$DNS_SUCCESS" = false ]; then
     echo -e "${RED}❌ Per-pod DNS resolution failed${NC}"
