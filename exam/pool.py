@@ -291,6 +291,7 @@ assert len(BY_ID_ALL) == len(ALL_TASKS), "duplicate task id"
 PATTERNS = [
     {"id": "describe-grep", "name": "k describe <type> <name> | grep <word>"},
     {"id": "describe", "name": "k describe <type> <name>"},
+    {"id": "explain", "name": "k explain <type>.<field>"},
     {"id": "get-format", "name": "k get <type> -o <format>"},
     {"id": "get", "name": "k get <type> <name>"},
     {"id": "create", "name": "k create <type> <name> ..."},
@@ -613,6 +614,12 @@ In namespace {ns}, node `k8squest-control-plane` is tainted `dedicated=gpu:NoSch
     Q("c97", "scheduling-6", WL, "label-taint", """
 In namespace {ns}, Pod `ssdpod` is Pending because no node has the label `disk=ssd`. Fix it without touching the Pod, so that it is scheduled onto node `k8squest-control-plane`.
 """, node_dependent=True),
+    Q("c98", "debugging-5", TS, "get", """
+Write the list of the Pods that are not Running, taken from all namespaces (not only {ns}), to `/opt/course/{ns}/notrunning.txt`. The list may have kubectl's header line or not, and may be `-o name` or `-o wide` output. Besides {ns}, the namespace `exam-c98-other` holds one Pod that is not Running.
+""", renames={"otherns": "exam-c98-other"}, cluster_objects=["namespace/exam-c98-other"]),
+    Q("c99", "debugging-6", TS, "explain", """
+Write the documented fields of a Pod's `tolerations` (the output of kubectl's built-in API documentation for `pod.spec.tolerations`, with its KIND and FIELD header lines) to `/opt/course/{ns}/tolerations.txt`.
+"""),
 ]
 BY_ID_QUESTION = {t["id"]: t for t in QUESTION_TASKS}
 assert len(BY_ID_QUESTION) == len(QUESTION_TASKS) and not set(BY_ID_QUESTION) & set(BY_ID_ALL), "duplicate task id"

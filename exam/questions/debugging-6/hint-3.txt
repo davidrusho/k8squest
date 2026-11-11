@@ -1,0 +1,1 @@
+Pattern: k explain <type>.<field>
