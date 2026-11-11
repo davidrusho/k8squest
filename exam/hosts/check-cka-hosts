@@ -1,0 +1,123 @@
+#!/bin/bash
+# Check the CKA exam hosts end to end (T-615). Run as david on k8s-lab; needs sudo.
+# For cka1..cka3: ssh to controlplane and node01 as candidate with passwordless sudo, the two kubeconfig
+# contexts, and the kubeadm cluster answering. Then it breaks cka1 on purpose, runs cka-hosts-reset and
+# asserts everything again. Exits non-zero when any check fails.
+# WARNING: this runs cka-hosts-reset, which resets cka1..cka3 (wipes .bashrc, .vimrc, .bash_history and
+# rewrites ~/.kube and ~/.ssh). Never run it while someone is practising on those accounts.
+set -u
+RESET=/usr/local/sbin/cka-hosts-reset
+FAILS=0
+cd /
+SCR=$(mktemp -d)
+trap 'rm -rf "$SCR"' EXIT
+
+pass() { echo "PASS  $1"; }
+fail() { echo "FAIL  $1"; FAILS=$((FAILS + 1)); }
+# as USER cmd...: stdout in $OUT, stderr in $SCR/err, exit status in $RC. Never aborts the script.
+as() {
+  local u=$1; shift
+  OUT=$(sudo -n -H -u "$u" "$@" 2> "$SCR/err")
+  RC=$?
+}
+# expect LABEL EXPECTED: compares $OUT, shows the first stderr lines on a mismatch.
+expect() {
+  if [ "$RC" -eq 0 ] && [ "$OUT" = "$2" ]; then
+    pass "$1"
+  else
+    fail "$1 (rc=$RC, got: $(printf '%s' "$OUT" | head -c 200); $(head -c 200 "$SCR/err"))"
+  fi
+}
+
+check_user() {
+  local u=$1 host sorted want
+  for host in controlplane node01; do
+    as "$u" ssh -o BatchMode=yes "$host" 'sudo -n true && hostname'
+    expect "$u: ssh $host as candidate with sudo" "$host"
+  done
+  as "$u" kubectl config get-contexts -o name
+  sorted=$(printf '%s\n' "$OUT" | sort)
+  want=$(printf 'cluster1\nkind-k8squest')
+  if [ "$RC" -eq 0 ] && [ "$sorted" = "$want" ]; then
+    pass "$u: contexts are exactly kind-k8squest and cluster1"
+  else
+    fail "$u: contexts are exactly kind-k8squest and cluster1 (rc=$RC, got: $(printf '%s' "$sorted" | tr '\n' ' '))"
+  fi
+  as "$u" kubectl config current-context
+  expect "$u: current-context is kind-k8squest" kind-k8squest
+  as "$u" kubectl --context cluster1 get nodes -o name
+  if [ "$RC" -eq 0 ] && [[ $'\n'"$OUT"$'\n' == *$'\nnode/controlplane\n'* ]] && [[ $'\n'"$OUT"$'\n' == *$'\nnode/node01\n'* ]]; then
+    pass "$u: kubectl --context cluster1 get nodes lists controlplane and node01"
+  else
+    fail "$u: kubectl --context cluster1 get nodes lists controlplane and node01 (rc=$RC, got: $(printf '%s' "$OUT" | tr '\n' ' '); $(head -c 200 "$SCR/err"))"
+  fi
+}
+
+echo "== deployed reset script"
+REPO_RESET="$(dirname "$0")/cka-hosts-reset"
+if [ ! -f "$REPO_RESET" ]; then
+  fail "repo copy of cka-hosts-reset not found next to this script"
+elif cmp -s "$RESET" "$REPO_RESET"; then
+  pass "deployed cka-hosts-reset matches the repo copy"
+else
+  fail "deployed $RESET differs from $REPO_RESET"
+fi
+
+echo "== name resolution"
+for pair in controlplane:192.168.1.226 node01:192.168.1.227; do
+  name=${pair%%:*}; ip=${pair##*:}
+  got=$(getent hosts "$name" | awk '{ print $1; exit }')
+  if [ "$got" = "$ip" ]; then pass "$name resolves to $ip"; else fail "$name resolves to '$got', expected $ip"; fi
+  cnt=$(awk -v n="$name" '{ line = $0; sub(/#.*/, "", line); c = split(line, f, /[ \t]+/)
+    for (i = 2; i <= c; i++) if (f[i] == n) { k++; break } } END { print k + 0 }' /etc/hosts)
+  if [ "$cnt" = 1 ]; then pass "/etc/hosts has exactly one line for $name"; else fail "/etc/hosts has $cnt lines for $name"; fi
+done
+
+echo "== config readable by the cka users"
+KH=$(awk '$1 == "UserKnownHostsFile" { print $2; exit }' /etc/ssh/ssh_config.d/50-cka-nodes.conf)
+if [ -n "$KH" ] && sudo -n -H -u cka1 test -r "$KH"; then
+  pass "cka1 can read the known_hosts file the ssh config names ($KH)"
+else
+  fail "cka1 cannot read the known_hosts file the ssh config names (${KH:-none found})"
+fi
+
+echo "== before tampering"
+for n in 1 2 3; do check_user "cka$n"; done
+
+declare -A AK_BEFORE
+for n in 1 2 3; do
+  hn=$(getent passwd "cka$n" | cut -d: -f6)
+  AK_BEFORE[$n]=$(sudo -n sha256sum "$hn/.ssh/authorized_keys" 2> /dev/null | awk '{ print $1 }')
+  if [ -z "${AK_BEFORE[$n]}" ]; then fail "cka$n: cannot hash authorized_keys before the reset"; fi
+done
+
+echo "== tampering with cka1"
+H=$(getent passwd cka1 | cut -d: -f6)
+if [ -z "$H" ]; then echo "FAIL  no user cka1"; exit 1; fi
+as cka1 rm -f "$H/.ssh/id_cka_nodes"
+as cka1 kubectl config use-context cluster1
+# shellcheck disable=SC2016 # $HOME is expanded by the inner shell, as cka1
+as cka1 bash -c 'printf "Host controlplane\n  HostName 127.0.0.1\n" > "$HOME/.ssh/config"'
+as cka1 ssh -o BatchMode=yes controlplane 'hostname'
+if [ "$RC" -ne 0 ]; then pass "cka1: tampering broke ssh (control)"; else fail "cka1: tampering did not break ssh, so the reset check proves nothing"; fi
+as cka1 kubectl config current-context
+if [ "$OUT" = cluster1 ]; then pass "cka1: tampering switched context (control)"; else fail "cka1: tampering did not switch context"; fi
+
+echo "== cka-hosts-reset"
+# shellcheck disable=SC2024 # the scratch files are meant to be written by the invoking user
+sudo -n "$RESET" > "$SCR/reset.out" 2> "$SCR/reset.err"
+RC=$?
+if [ "$RC" -eq 0 ]; then pass "cka-hosts-reset exited 0"; else fail "cka-hosts-reset exited $RC: $(head -c 300 "$SCR/reset.err")"; fi
+if [ -s "$SCR/reset.err" ]; then echo "NOTE  reset stderr: $(head -c 300 "$SCR/reset.err")"; fi
+
+echo "== after reset"
+for n in 1 2 3; do check_user "cka$n"; done
+for n in 1 2 3; do
+  hn=$(getent passwd "cka$n" | cut -d: -f6)
+  after=$(sudo -n sha256sum "$hn/.ssh/authorized_keys" 2> /dev/null | awk '{ print $1 }')
+  if [ -n "$after" ] && [ "$after" = "${AK_BEFORE[$n]}" ]; then pass "cka$n: authorized_keys unchanged by the reset"; else fail "cka$n: authorized_keys changed or missing after the reset"; fi
+done
+
+if [ "$FAILS" -eq 0 ]; then echo "ALL CHECKS PASSED"; exit 0; fi
+echo "$FAILS CHECK(S) FAILED"
+exit 1

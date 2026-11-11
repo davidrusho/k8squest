@@ -3,13 +3,136 @@
 set -eu
 SRC_KUBE=/home/david/.kube/config
 CTX=kind-k8squest
+CKA=/etc/cka-hosts
+CP_IP=192.168.1.226
+N1_IP=192.168.1.227
+SSH_CONF_DIR=/etc/ssh/ssh_config.d
+# /etc/cka-hosts is root-only (0700), so the pinned host keys are published where the cka users can read them.
+KNOWN_HOSTS_PUB=/etc/ssh/cka-nodes_known_hosts
+warn() { echo "cka-hosts-reset: warning: $*" >&2; }
+# One private temp dir (0700) for everything that may hold credentials; removed on exit. The two
+# system files below are rewritten through temp files next to them so the final mv is atomic.
+TMPD=$(mktemp -d)
+HOSTS_NEW=
+CONF_NEW=
+KH_NEW=
+trap 'rm -rf "$TMPD"; rm -f "$HOSTS_NEW" "$CONF_NEW" "$KH_NEW"' EXIT
 # Give the exam hosts a kubeconfig that holds only $CTX, with it as current-context, so a context switch
 # in david's own config (the K8sQuest engine does that) cannot leak into the exam. The file carries
 # credentials: build it once in a 0600 temp file, never print it, remove it on exit.
-PINNED=$(mktemp)
-trap 'rm -f "$PINNED"' EXIT
+PINNED=$TMPD/pinned
 KUBECONFIG="$SRC_KUBE" kubectl config view --minify --flatten --context "$CTX" > "$PINNED"
 [ -s "$PINNED" ] || { echo "could not build a kubeconfig pinned to $CTX" >&2; exit 1; }
+chmod 600 "$PINNED"
+
+# The kubeadm practice cluster (controlplane, node01) is optional: provisioned once by cka-nodes-provision.
+# When any piece is missing, say so once and carry on with the kind-only setup. Nothing here touches the network.
+NODES=1
+for f in "$CKA/known_hosts" "$CKA/cluster1.kubeconfig" \
+  "$CKA/ssh/cka1" "$CKA/ssh/cka1.pub" "$CKA/ssh/cka2" "$CKA/ssh/cka2.pub" "$CKA/ssh/cka3" "$CKA/ssh/cka3.pub"; do
+  [ -s "$f" ] || NODES=0
+done
+[ "$NODES" -eq 1 ] || warn "$CKA is incomplete (run cka-nodes-provision); exam hosts get the kind cluster only"
+
+# Name the two VMs in /etc/hosts: exactly one line each, any other line mapping those names is dropped.
+# Non-fatal: a failure here must never fail the exam start.
+set_hosts() {
+  HOSTS_NEW=$(mktemp /etc/.hosts.XXXXXX)
+  awk '{ line = $0; sub(/#.*/, "", line); n = split(line, f, /[ \t]+/); drop = 0
+       for (i = 2; i <= n; i++) if (f[i] == "controlplane" || f[i] == "node01") drop = 1
+       if (!drop) print }' /etc/hosts > "$HOSTS_NEW" || return 1
+  printf '%s controlplane\n%s node01\n' "$CP_IP" "$N1_IP" >> "$HOSTS_NEW" || return 1
+  chmod --reference=/etc/hosts "$HOSTS_NEW" || return 1
+  chown --reference=/etc/hosts "$HOSTS_NEW" || return 1
+  mv -f "$HOSTS_NEW" /etc/hosts || return 1
+  HOSTS_NEW=
+}
+if [ "$NODES" -eq 1 ]; then
+  set_hosts || warn "could not update /etc/hosts for controlplane and node01"
+fi
+
+# ssh to the two VMs from the cka users: candidate, their own key, pinned host keys. Match is evaluated
+# with both criteria on one line (localuser AND host), so david and every other host are unaffected.
+if [ "$NODES" -eq 1 ]; then
+  if ! grep -Eq '^[[:space:]]*Include[[:space:]].*ssh_config\.d' /etc/ssh/ssh_config; then
+    warn "/etc/ssh/ssh_config has no Include for ssh_config.d; the cka nodes ssh settings will not apply"
+  fi
+  KH_NEW=$(mktemp /etc/ssh/.cka-nodes_known_hosts.XXXXXX)
+  install -m 644 -o root -g root "$CKA/known_hosts" "$KH_NEW"
+  mv -f "$KH_NEW" "$KNOWN_HOSTS_PUB"
+  KH_NEW=
+  install -d -m 755 "$SSH_CONF_DIR"
+  CONF_NEW=$(mktemp "$SSH_CONF_DIR/.50-cka-nodes.XXXXXX")
+  cat > "$CONF_NEW" <<'CONF'
+# Managed by cka-hosts-reset (T-615). Applies to cka1..cka3 connecting to the exam VMs only.
+Match localuser cka1,cka2,cka3 host controlplane,node01
+  User candidate
+  IdentityFile ~/.ssh/id_cka_nodes
+  IdentitiesOnly yes
+  UserKnownHostsFile /etc/ssh/cka-nodes_known_hosts
+  StrictHostKeyChecking yes
+CONF
+  chmod 644 "$CONF_NEW"
+  mv -f "$CONF_NEW" "$SSH_CONF_DIR/50-cka-nodes.conf"
+  CONF_NEW=
+fi
+
+# Kubeconfig for the exam hosts: the pinned kind file, plus the kubeadm cluster as context cluster1 when
+# it is available. The merge happens in temp files and is checked before anything is installed; any
+# problem falls back to the kind-only file.
+KUBE_OUT=$PINNED
+build_merged() {
+  local c1=$TMPD/cluster1 merged=$TMPD/merged cn un cx names sorted
+  cp "$CKA/cluster1.kubeconfig" "$c1" || return 1
+  chmod 600 "$c1"
+  cn=$(KUBECONFIG="$c1" kubectl config view --raw -o jsonpath='{.clusters[0].name}') || return 1
+  un=$(KUBECONFIG="$c1" kubectl config view --raw -o jsonpath='{.users[0].name}') || return 1
+  cx=$(KUBECONFIG="$c1" kubectl config view --raw -o jsonpath='{.contexts[0].name}') || return 1
+  [ -n "$cn" ] && [ -n "$un" ] && [ -n "$cx" ] || return 1
+  # kubectl cannot rename a cluster or user entry, so rewrite exactly the three name lines of the standard
+  # admin.conf layout; the check below fails the whole merge if the layout was not what this expects.
+  awk -v cn="$cn" -v un="$un" '
+    /^[a-z-]+:/ { sec = $1 }
+    sec == "clusters:" && $0 == "  name: " cn { print "  name: cluster1"; next }
+    sec == "contexts:" && $0 == "    cluster: " cn { print "    cluster: cluster1"; next }
+    sec == "contexts:" && $0 == "    user: " un { print "    user: cluster1-admin"; next }
+    sec == "users:" && $0 == "- name: " un { print "- name: cluster1-admin"; next }
+    { print }' "$c1" > "$c1.new" || return 1
+  mv -f "$c1.new" "$c1"
+  KUBECONFIG="$c1" kubectl config rename-context "$cx" cluster1 > /dev/null || return 1
+  [ "$(KUBECONFIG="$c1" kubectl config view --raw -o jsonpath='{.clusters[*].name}')" = cluster1 ] || return 1
+  [ "$(KUBECONFIG="$c1" kubectl config view --raw -o jsonpath='{.users[*].name}')" = cluster1-admin ] || return 1
+  [ "$(KUBECONFIG="$c1" kubectl config view --raw -o jsonpath='{.contexts[0].context.cluster}')" = cluster1 ] || return 1
+  [ "$(KUBECONFIG="$c1" kubectl config view --raw -o jsonpath='{.contexts[0].context.user}')" = cluster1-admin ] || return 1
+  KUBECONFIG="$PINNED:$c1" kubectl config view --flatten > "$merged" || return 1
+  chmod 600 "$merged"
+  KUBECONFIG="$merged" kubectl config use-context "$CTX" > /dev/null || return 1
+  [ "$(KUBECONFIG="$merged" kubectl config current-context)" = "$CTX" ] || return 1
+  names=$(KUBECONFIG="$merged" kubectl config get-contexts -o name) || return 1
+  sorted=$(printf '%s\n' "$names" | sort)
+  [ "$sorted" = "$(printf '%s\n%s' cluster1 "$CTX")" ] || return 1
+  KUBE_OUT=$merged
+}
+if [ "$NODES" -eq 1 ]; then
+  build_merged || warn "could not merge the cluster1 kubeconfig; exam hosts get the kind cluster only"
+fi
+
+# Per-user ssh setup for the exam VMs. Root writes into the user-owned ~/.ssh here, as the .bashrc and
+# .kube steps below do, and accepts symlink races on the files inside: cka1 to cka3 are the owner's own
+# practice accounts. A symlinked or non-directory ~/.ssh is skipped with a warning, never removed, so
+# authorized_keys cannot be lost. authorized_keys is never touched.
+ssh_setup() {
+  local u=$1 h=$2
+  if [ -L "$h/.ssh" ] || { [ -e "$h/.ssh" ] && [ ! -d "$h/.ssh" ]; }; then
+    warn "$h/.ssh is a symlink or not a directory; skipped ssh setup for $u"
+    return 1
+  fi
+  install -d -m 700 -o "$u" -g "$u" "$h/.ssh" || return 1
+  rm -f "$h/.ssh/known_hosts" "$h/.ssh/config" "$h/.ssh/id_cka_nodes" "$h/.ssh/id_cka_nodes.pub" || return 1
+  install -m 600 -o "$u" -g "$u" "$CKA/ssh/$u" "$h/.ssh/id_cka_nodes" || return 1
+  install -m 644 -o "$u" -g "$u" "$CKA/ssh/$u.pub" "$h/.ssh/id_cka_nodes.pub" || return 1
+}
+
 for n in 1 2 3; do
   u=cka$n
   h=$(getent passwd "$u" | cut -d: -f6)
@@ -29,7 +152,10 @@ BLOCK
   mv -f "$h/.bashrc.new" "$h/.bashrc"
   rm -f "$h/.nanorc" "$h/.bash_history" "$h/.vimrc"
   install -d -m 700 -o "$u" -g "$u" "$h/.kube"
-  install -m 600 -o "$u" -g "$u" "$PINNED" "$h/.kube/config"
+  install -m 600 -o "$u" -g "$u" "$KUBE_OUT" "$h/.kube/config"
+  if [ "$NODES" -eq 1 ]; then
+    ssh_setup "$u" "$h" || warn "ssh setup for $u did not complete"
+  fi
 done
 # Answer files for Drill output tasks go in /opt/course/<task namespace>/. /opt/course is sticky and
 # world-writable like /tmp: that protects its own entries (a cka host cannot remove or rename a task's

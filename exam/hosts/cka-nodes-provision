@@ -1,0 +1,105 @@
+#!/bin/bash
+# Provision the kubeadm practice VMs and the k8s-lab side of the CKA exam hosts (T-615).
+# Run once as root on k8s-lab; safe to re-run, and needed again after a VM rebuild.
+# Creates the cka1..cka3 key pairs, the `candidate` user on each VM, the pinned host keys and a copy of
+# the cluster admin kubeconfig under /etc/cka-hosts. cka-hosts-reset installs those into each cka home.
+# Nothing secret is printed: only fingerprints and the apiserver URL.
+set -eu
+umask 077
+CKA=/etc/cka-hosts
+ADMIN=david
+CP_IP=192.168.1.226
+N1_IP=192.168.1.227
+APISERVER=https://$CP_IP:6443
+SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes)
+die() { echo "cka-nodes-provision: $*" >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] || die "run as root"
+command -v kubectl >/dev/null || die "kubectl not found"
+ADMIN_HOME=$(getent passwd "$ADMIN" | cut -d: -f6)
+[ -n "$ADMIN_HOME" ] || die "no user $ADMIN"
+TMPD=$(mktemp -d)
+CONF_TMP=
+trap 'rm -rf "$TMPD"; [ -z "$CONF_TMP" ] || rm -f "$CONF_TMP"' EXIT
+
+install -d -m 700 -o root -g root "$CKA" "$CKA/ssh"
+for n in 1 2 3; do
+  k=$CKA/ssh/cka$n
+  [ -f "$k" ] || ssh-keygen -q -t ed25519 -N '' -C "cka$n@k8s-lab" -f "$k"
+  if [ ! -s "$k.pub" ]; then
+    ssh-keygen -y -f "$k" > "$k.pub.new"
+    mv -f "$k.pub.new" "$k.pub"
+  fi
+  chmod 600 "$k"; chmod 644 "$k.pub"
+done
+
+# Host keys first, and only trusted when david's own known_hosts already holds the same key, so nothing
+# is sent to a VM before its identity is checked.
+: > "$TMPD/known_hosts"
+scan_one() {
+  local name=$1 ip=$2 scan key trusted match
+  scan=$(ssh-keyscan -t ed25519 "$ip" 2>/dev/null) || die "ssh-keyscan failed for $ip"
+  key=$(printf '%s\n' "$scan" | awk '$1 !~ /^#/ && $2 == "ssh-ed25519" { print $2 " " $3; exit }')
+  [ -n "$key" ] || die "no ed25519 host key from $ip"
+  trusted=$(sudo -u "$ADMIN" ssh-keygen -F "$ip" -f "$ADMIN_HOME/.ssh/known_hosts" 2>/dev/null) \
+    || die "$ADMIN has no known_hosts entry for $ip; ssh there once as $ADMIN and verify the key"
+  match=$(printf '%s\n' "$trusted" | awk -v k="$key" '$1 !~ /^#/ && ($2 " " $3) == k { print "yes"; exit }')
+  [ "$match" = yes ] || die "host key from $ip differs from the one $ADMIN trusts"
+  printf '%s,%s %s\n' "$name" "$ip" "$key" >> "$TMPD/known_hosts"
+}
+scan_one controlplane "$CP_IP"
+scan_one node01 "$N1_IP"
+install -m 644 -o root -g root "$TMPD/known_hosts" "$CKA/.known_hosts.new"
+mv -f "$CKA/.known_hosts.new" "$CKA/known_hosts"
+
+# Remote script: candidate user, sudoers drop-in (validated before install), authorized_keys with the
+# three public keys. Built locally and sent on stdin so no multi-line text rides in a quoted ssh string.
+{
+  cat <<'HEAD'
+set -eu
+id candidate >/dev/null 2>&1 || useradd -m -s /bin/bash candidate
+usermod -s /bin/bash candidate >/dev/null   # prints "usermod: no changes" on stdout when re-run
+t=$(mktemp)
+echo 'candidate ALL=(ALL) NOPASSWD:ALL' > "$t"
+visudo -cf "$t" >/dev/null
+install -m 0440 -o root -g root "$t" /etc/sudoers.d/candidate
+rm -f "$t"
+h=$(getent passwd candidate | cut -d: -f6)
+install -d -m 700 -o candidate -g candidate "$h/.ssh"
+k=$(mktemp)
+cat > "$k" <<'KEYS'
+HEAD
+  cat "$CKA/ssh/cka1.pub" "$CKA/ssh/cka2.pub" "$CKA/ssh/cka3.pub"
+  cat <<'TAIL'
+KEYS
+install -m 600 -o candidate -g candidate "$k" "$h/.ssh/authorized_keys"
+rm -f "$k"
+echo provisioned
+TAIL
+} > "$TMPD/remote.sh"
+
+for ip in "$CP_IP" "$N1_IP"; do
+  # shellcheck disable=SC2024 # the stdin redirect is meant to be read by root, not by david
+  res=$(sudo -u "$ADMIN" ssh "${SSH_OPTS[@]}" "$ADMIN@$ip" 'sudo bash -s' < "$TMPD/remote.sh") \
+    || die "provisioning $ip failed"
+  [ "$res" = provisioned ] || die "unexpected reply from $ip"
+done
+
+# Cluster admin kubeconfig: stdout of the ssh goes only into a 0600 file, never to the terminal.
+CONF_TMP=$(mktemp "$CKA/.cluster1.XXXXXX")
+# shellcheck disable=SC2024 # the output file is meant to be written by root
+sudo -u "$ADMIN" ssh "${SSH_OPTS[@]}" -n "$ADMIN@$CP_IP" 'sudo cat /etc/kubernetes/admin.conf' > "$CONF_TMP" \
+  || die "could not read admin.conf from $CP_IP"
+[ -s "$CONF_TMP" ] || die "admin.conf copy is empty"
+chmod 600 "$CONF_TMP"
+server=$(KUBECONFIG="$CONF_TMP" kubectl config view -o jsonpath='{.clusters[0].cluster.server}') \
+  || die "admin.conf copy does not parse"
+[ "$server" = "$APISERVER" ] || die "admin.conf server is $server, expected $APISERVER"
+mv -f "$CONF_TMP" "$CKA/cluster1.kubeconfig"
+CONF_TMP=
+
+echo "cka-nodes-provision: ok"
+echo "  host keys:  $(ssh-keygen -lf "$CKA/known_hosts" | awk '{print $1 " " $2}' | tr '\n' ' ')"
+for n in 1 2 3; do
+  echo "  cka$n key:   $(ssh-keygen -lf "$CKA/ssh/cka$n.pub" | awk '{print $2}')"
+done
+echo "  cluster1 kubeconfig: $CKA/cluster1.kubeconfig (server $server)"
