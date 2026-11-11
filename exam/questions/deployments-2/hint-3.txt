@@ -1,0 +1,1 @@
+Pattern: k scale deploy <name> --replicas=<n>

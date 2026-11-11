@@ -1,0 +1,1 @@
+--command makes everything after -- the container command. Without it, the words become args.

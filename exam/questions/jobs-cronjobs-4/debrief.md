@@ -1,0 +1,1 @@
+--from=cj/<name> copies the CronJob's job template into a one-off Job; check it with `k get job manual-run`.

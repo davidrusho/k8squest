@@ -1,0 +1,1 @@
+Pattern: k apply -f <file>

@@ -9,6 +9,8 @@ if str(EXAM) not in sys.path:
 # The unit tests make no cluster calls. Any real subprocess is recorded and refused; a test that needs
 # subprocess.run patches it (mock.patch.object over this guard). test_zzz_no_subprocess.py checks the record.
 SUBPROCESS_CALLS = []
+REAL_RUN = subprocess.run       # both kept for the one syntax-only `bash -n` test; nothing else may use them
+REAL_POPEN = subprocess.Popen   # the real run() calls Popen, so it is restored with it
 
 
 def _blocked_run(*args, **kwargs):

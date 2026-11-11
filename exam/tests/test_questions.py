@@ -1,6 +1,7 @@
 """Question tasks (drill-page questions turned into cluster tasks): drill-only, admission, paths, texts, e2e arg logic."""
 import os
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -217,6 +218,13 @@ class ReviewFixes(unittest.TestCase):
         self.assertIn(["kubectl", "delete", "pv/drill-c98-data", "--ignore-not-found", "--wait=false"], cluster.calls)
 
 
+NODE = "k8squest-control-plane"     # the kind node name is a literal, not the namespace token; only c44 may carry it
+
+
+def strip_node(task_id, text):
+    return text.replace(NODE, "") if task_id == "c44" else text
+
+
 class AllQuestionTasks(unittest.TestCase):
     FILES = ("broken.yaml", "validate.sh", "solution.sh", "hint-1.txt", "hint-2.txt", "hint-3.txt", "debrief.md")
 
@@ -250,13 +258,13 @@ class AllQuestionTasks(unittest.TestCase):
         for t in pool.QUESTION_TASKS:
             body = pool.render_text(t, "h", "drill")["body"]
             self.assertNotIn("{ns}", body, t["id"])
-            self.assertNotIn("k8squest", body, t["id"])
+            self.assertNotIn("k8squest", strip_node(t["id"], body), t["id"])
             self.assertNotIn("exam-c", body, t["id"])
-            stripped = re.sub(r"drill-c\d+-[\w-]+", "", body)
+            stripped = re.sub(r"\b(env|APP_ENV)=(dev|prod)\b", "", re.sub(r"drill-c\d+-[\w-]+", "", body))
             self.assertIsNone(re.search(r"\bdev\b|\bprod\b(?!-ns)", stripped), (t["id"], body))
             texts = levels.level_texts(t["level"], pool.namespace(t["id"], "drill"), pool.renames_for(t, "drill"))
             for raw in texts["hints"] + [texts["solution"], texts["debrief"]]:
-                self.assertNotIn("k8squest", raw or "", t["id"])
+                self.assertNotIn("k8squest", strip_node(t["id"], raw or ""), t["id"])
                 self.assertNotRegex(raw or "", r"\b(devns|prodns)\b", t["id"])
 
     def test_materialized_files_use_the_task_namespace_and_renames(self):
@@ -265,7 +273,7 @@ class AllQuestionTasks(unittest.TestCase):
             try:
                 for f in ("broken.yaml", "validate.sh", "solution.sh"):
                     txt = (p / f).read_text()
-                    self.assertNotIn("k8squest", txt, (t["id"], f))
+                    self.assertNotIn("k8squest", strip_node(t["id"], txt), (t["id"], f))
                     self.assertNotRegex(txt, r"\b(devns|prodns)\b", (t["id"], f))
             finally:
                 levels.cleanup(p)
@@ -300,6 +308,14 @@ class AllQuestionTasks(unittest.TestCase):
         for t in pool.QUESTION_TASKS:
             h = (levels.level_dir(t["level"]) / "hint-3.txt").read_text().strip()
             self.assertEqual(h, "Pattern: " + names[t["pattern"]], t["id"])
+
+    def test_every_shell_script_parses(self):
+        import tests._path as guard
+        for f in sorted(levels.QUESTIONS.glob("*/*.sh")):
+            with mock.patch.object(subprocess, "Popen", guard.REAL_POPEN):     # `bash -n` parses only, never executes
+                r = guard.REAL_RUN(["bash", "-n", str(f)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, f"{f}: {r.stderr}")
+        self.assertTrue(list(levels.QUESTIONS.glob("*/setup.sh")))
 
     def test_c05_node_port_is_used_by_no_level(self):
         self.assertIn("30777", pool.BY_ID_QUESTION["c05"]["text"])

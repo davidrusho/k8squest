@@ -294,6 +294,7 @@ PATTERNS = [
     {"id": "create", "name": "k create <type> <name> ..."},
     {"id": "run", "name": "k run <name> --image=<image> ..."},
     {"id": "set", "name": "k set <what> deploy <name> ..."},
+    {"id": "scale", "name": "k scale deploy <name> --replicas=<n>"},
     {"id": "rollout", "name": "k rollout <action> deploy/<name>"},
     {"id": "expose", "name": "k expose <type> <name> --port=<port>"},
     {"id": "label-taint", "name": "k label|taint <type> <name> <change>"},
@@ -370,6 +371,87 @@ In namespace {ns}, create an ingress NetworkPolicy named `allow-client` so that 
     Q("c17", "networking-7", NET, "apply", """
 In namespace {ns}, create an ingress NetworkPolicy named `allow-prod-ns` so that Pods labelled `app=web` accept TCP port 80 only from all Pods of the namespace `exam-c17-prod` (which already exists; select it with any label it carries, for example `kubernetes.io/metadata.name`, as long as no other namespace matches too). It must have exactly one ingress rule with exactly one `from` entry (a namespaceSelector, optionally with an empty podSelector), and its only policy type must be Ingress.
 """, renames={"prodns": "exam-c17-prod"}, cluster_objects=["namespace/exam-c17-prod"]),
+    Q("c18", "pods-1", WL, "run", """
+In namespace {ns}, create a Pod named `web` with image `nginx`.
+"""),
+    Q("c19", "pods-3", WL, "run", """
+In namespace {ns}, create a Pod named `bb` with image `busybox` that runs the command `sleep 3600`.
+"""),
+    Q("c20", "pods-4", WL, "run", """
+In namespace {ns}, create a Pod named `fe` with image `nginx`, container port 80, and the labels `tier=frontend` and `env=prod`.
+"""),
+    Q("c21", "pods-5", WL, "run", """
+In namespace {ns}, create a Pod named `envpod` with image `nginx` and the environment variable `APP_ENV=prod`.
+"""),
+    Q("c22", "pods-8", WL, "delete", """
+In namespace {ns}, delete Pod `web` immediately, without waiting for the grace period. Leave Pod `web2` running.
+"""),
+    Q("c23", "deployments-1", WL, "create", """
+In namespace {ns}, create a Deployment named `web` with image `nginx` and 3 replicas.
+"""),
+    Q("c24", "deployments-2", WL, "scale", """
+In namespace {ns}, scale Deployment `web` to 5 replicas.
+"""),
+    Q("c25", "deployments-3", WL, "set", """
+In namespace {ns}, change the image of container `nginx` in Deployment `web` to `nginx:1.27-alpine`.
+"""),
+    Q("c26", "deployments-4", WL, "rollout", """
+In namespace {ns}, Deployment `web` has been updated once since it was created. Undo its last rollout so that it runs the previous revision's Pod template.
+"""),
+    Q("c27", "deployments-5", WL, "rollout", """
+In namespace {ns}, Deployment `web` has three revisions. Roll it back to revision 1, so that it runs revision 1's Pod template.
+"""),
+    Q("c28", "deployments-6", WL, "set", """
+In namespace {ns}, give the container of Deployment `web` a CPU request of `100m`, a memory request of `128Mi`, a CPU limit of `200m` and a memory limit of `256Mi`.
+"""),
+    Q("c29", "deployments-8", WL, "set", """
+In namespace {ns}, add the environment variable `APP_ENV=prod` to Deployment `web`.
+"""),
+    Q("c30", "configmaps-secrets-1", WL, "create", """
+In namespace {ns}, create a ConfigMap named `app-config` with exactly two keys: `APP_ENV=prod` and `APP_DEBUG=false`.
+"""),
+    Q("c31", "configmaps-secrets-3", WL, "create", """
+In namespace {ns}, create a generic Secret named `db-creds` with exactly two keys: `username=admin` and `password=s3cret`.
+"""),
+    Q("c32", "configmaps-secrets-5", WL, "set", """
+In namespace {ns}, make Deployment `web` load every key of ConfigMap `app-config` (`APP_ENV` and `APP_DEBUG`) as environment variables of its container, taken from the ConfigMap.
+"""),
+    Q("c33", "configmaps-secrets-6", WL, "patch-edit", """
+In namespace {ns}, change ConfigMap `app-config` so that `APP_ENV=dev`. Its other key must stay unchanged.
+"""),
+    Q("c34", "configmaps-secrets-7", WL, "create", """
+In namespace {ns}, create a docker-registry Secret named `regcred` for server `registry.io`, user `user`, password `pass`.
+"""),
+    Q("c35", "configmaps-secrets-8", WL, "apply", """
+In namespace {ns}, create a Pod named `secpod` (image `nginx`) that mounts the existing Secret `db-creds` as a volume at `/etc/creds`.
+"""),
+    Q("c36", "jobs-cronjobs-1", WL, "create", """
+In namespace {ns}, create a Job named `hello` with image `busybox` that runs `echo hello`. The Job must have completed.
+"""),
+    Q("c37", "jobs-cronjobs-2", WL, "create", """
+In namespace {ns}, create a CronJob named `backup` with image `busybox` that runs `date` every 5 minutes.
+"""),
+    Q("c38", "jobs-cronjobs-4", WL, "create", """
+In namespace {ns}, run the existing CronJob `backup` once right now, as a Job named `manual-run` created from the CronJob.
+"""),
+    Q("c39", "jobs-cronjobs-5", WL, "patch-edit", """
+In namespace {ns}, suspend CronJob `backup` so that it stops scheduling new runs.
+"""),
+    Q("c40", "jobs-cronjobs-6", WL, "apply", """
+In namespace {ns}, create a Job named `j1` (image `busybox`, command `sleep 10`) that runs 3 completions, 2 at a time.
+"""),
+    Q("c41", "scheduling-1", WL, "apply", """
+In namespace {ns}, create a Pod named `ssdpod` (image `nginx`) that can only run on nodes labelled `disk=ssd`, using `nodeSelector`. No node has that label, so the Pod is expected to stay Pending.
+"""),
+    Q("c42", "scheduling-2", WL, "apply", """
+In namespace {ns}, create a Pod named `req` (image `nginx`) that must run on a node where the label `disk` is in (`ssd`), using `requiredDuringSchedulingIgnoredDuringExecution` node affinity with a `matchExpressions` entry (key `disk`, operator `In`, values `ssd`). No node has that label, so the Pod is expected to stay Pending.
+"""),
+    Q("c43", "scheduling-3", WL, "apply", """
+In namespace {ns}, create a Pod named `pref` (image `nginx`) that prefers, but does not require, nodes with label `disk=ssd`, using `preferredDuringSchedulingIgnoredDuringExecution` node affinity with a `matchExpressions` entry (key `disk`, operator `In`, values `ssd`) and no `nodeSelector`.
+"""),
+    Q("c44", "scheduling-5", WL, "apply", """
+In namespace {ns}, create a Pod named `pinned` (image `nginx`) that runs on node `k8squest-control-plane` by name (`spec.nodeName`), skipping the scheduler. It must not use a `nodeSelector` or affinity.
+"""),
 ]
 BY_ID_QUESTION = {t["id"]: t for t in QUESTION_TASKS}
 assert len(BY_ID_QUESTION) == len(QUESTION_TASKS) and not set(BY_ID_QUESTION) & set(BY_ID_ALL), "duplicate task id"

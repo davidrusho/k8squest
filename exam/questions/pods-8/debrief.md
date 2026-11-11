@@ -1,0 +1,1 @@
+--now (or --grace-period=1) skips the default 30 s termination grace period; check with `k get po web`.
