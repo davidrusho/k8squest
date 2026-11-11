@@ -31,4 +31,10 @@ BLOCK
   install -d -m 700 -o "$u" -g "$u" "$h/.kube"
   install -m 600 -o "$u" -g "$u" "$PINNED" "$h/.kube/config"
 done
+# Answer files for Drill output tasks go in /opt/course/<task namespace>/. /opt/course is sticky and
+# world-writable like /tmp: that protects its own entries (a cka host cannot remove or rename a task's
+# directory). Each task's own directory is created sticky (1777) by that task's setup.sh, which is what
+# keeps a cka host from replacing or removing the files the grader owns, and makes the kernel refuse to
+# follow a cka-owned symlink there.
+install -d -m 1777 /opt/course
 echo "cka-hosts-reset: done"

@@ -1,0 +1,1 @@
+Pattern: k auth can-i <verb> <type>

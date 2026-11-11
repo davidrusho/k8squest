@@ -318,6 +318,68 @@ class AllQuestionTasks(unittest.TestCase):
             self.assertEqual(r.returncode, 0, f"{f}: {r.stderr}")
         self.assertTrue(list(levels.QUESTIONS.glob("*/setup.sh")))
 
+    RM = "rm -rf /opt/course/k8squest"
+    OWN = '[ "$(stat -c %U /opt/course/k8squest)" = "$(id -un)" ] || { echo "answer dir not owned by $(id -un)"; exit 1; }'
+
+    def test_answer_file_tasks_reset_their_own_directory_first(self):
+        seen = 0
+        for t in pool.QUESTION_TASKS:
+            d = levels.level_dir(t["level"])
+            texts = {f.name: f.read_text() for f in d.iterdir() if f.is_file()}
+            for name, txt in texts.items():
+                self.assertNotIn("sudo", txt, (t["id"], name))
+            if not any("/opt/course" in x for x in texts.values()):
+                continue
+            seen += 1
+            self.assertIn("setup.sh", texts, t["id"])
+            body = [l.strip() for l in texts["setup.sh"].splitlines() if l.strip() and not l.strip().startswith("#")]
+            body = [l for l in body if l != "set -e" and not l.startswith("NS=")]
+            self.assertEqual(body[0], self.RM, t["id"])
+            self.assertRegex(body[1], r"^mkdir -m (1777|0700) /opt/course/k8squest$", t["id"])
+            self.assertEqual(body[2], self.OWN, t["id"])
+            self.assertEqual(texts["setup.sh"].count("rm -rf"), 1, t["id"])
+            for name, txt in texts.items():
+                for path in re.findall(r"/opt/course/[\w./-]+", txt):
+                    self.assertTrue(re.fullmatch(r"/opt/course/k8squest(/[\w.-]+)?", path), (t["id"], name, path))
+        self.assertGreaterEqual(seen, 30)
+
+    def test_validators_read_the_answer_without_following_symlinks(self):
+        for t in pool.QUESTION_TASKS:
+            v = (levels.level_dir(t["level"]) / "validate.sh").read_text()
+            if "/opt/course" in v:
+                self.assertIn("os.O_NOFOLLOW", v, t["id"])
+                self.assertIn("S_ISREG", v, t["id"])
+
+    def test_embedded_validator_python_compiles(self):
+        n = 0
+        for t in pool.QUESTION_TASKS:
+            v = (levels.level_dir(t["level"]) / "validate.sh").read_text()
+            if "<<'PY'" not in v:
+                continue
+            src = v.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
+            compile(src, t["id"] + "/validate.sh", "exec")       # compile only, never executed
+            n += 1
+        self.assertGreaterEqual(n, 30)
+
+    def test_materialized_answer_task_resets_only_its_own_namespace_directory(self):
+        t = pool.BY_ID_QUESTION["c60"]
+        p = levels.materialize(t["level"], "drill-c60", pool.renames_for(t, "drill"))
+        try:
+            s = (p / "setup.sh").read_text()
+            self.assertNotIn("k8squest", s)
+            self.assertEqual(re.findall(r"rm -rf (\S+)", s), ["/opt/course/drill-c60"])
+            self.assertEqual(re.findall(r"mkdir -m \S+ (\S+)", s), ["/opt/course/drill-c60"])
+        finally:
+            levels.cleanup(p)
+
+    def test_answer_paths_in_task_text_match_the_files(self):
+        for t in pool.QUESTION_TASKS:
+            d = levels.level_dir(t["level"])
+            if "/opt/course" not in (d / "validate.sh").read_text():
+                continue
+            for path in re.findall(r"/opt/course/\{ns\}/[\w.-]+", t["text"]):
+                self.assertIn(path.replace("{ns}", "k8squest"), (d / "validate.sh").read_text() + (d / "setup.sh").read_text(), (t["id"], path))
+
     def test_c05_node_port_is_used_by_no_level(self):
         self.assertIn("30777", pool.BY_ID_QUESTION["c05"]["text"])
         for f in levels.WORLDS.rglob("*"):

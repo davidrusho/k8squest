@@ -464,6 +464,129 @@ Create a PersistentVolume named `exam-c47-pv1` with capacity `1Gi`, access mode 
     Q("c48", "storage-7", ST, "patch-edit", """
 Change the reclaim policy of the existing PersistentVolume `exam-c48-pv1` to `Retain`. Leave the rest of the PersistentVolume unchanged.
 """, renames={"pv1": "exam-c48-pv1"}, cluster_objects=["pv/exam-c48-pv1"]),
+    Q("c49", "context-namespace-1", CA, "config", """
+Write the list of every context in the kubeconfig to `/opt/course/{ns}/contexts.txt`.
+"""),
+    Q("c50", "context-namespace-2", CA, "config", """
+Write only the name of the context you are using right now to `/opt/course/{ns}/current.txt`.
+"""),
+    Q("c51", "context-namespace-6", CA, "get", """
+Write the list of all namespaces to `/opt/course/{ns}/namespaces.txt`.
+"""),
+    Q("c52", "context-namespace-7", CA, "get", """
+Write the list of the pods in every namespace to `/opt/course/{ns}/allpods.txt`.
+"""),
+    Q("c53", "context-namespace-8", CA, "get", """
+Write the list of the pods in namespace `kube-system` to `/opt/course/{ns}/kubesystem.txt`. Do not change your default namespace.
+"""),
+    Q("c54", "pods-2", WL, "apply", """
+In namespace {ns}, write the YAML for a Pod named `web2` (image `nginx`) to `/opt/course/{ns}/pod.yaml` without creating it, then create the Pod from that file.
+"""),
+    Q("c55", "pods-6", WL, "logs-exec", """
+In namespace {ns}, write the hostname of the container in the running Pod `web` (obtained without opening a shell) to `/opt/course/{ns}/hostname.txt`.
+"""),
+    Q("c56", "pods-7", WL, "run", """
+In namespace {ns}, run a one-off Pod named `tmp` (image `busybox`) that prints the date and is removed automatically afterwards. Write what it printed to `/opt/course/{ns}/date.txt`.
+"""),
+    Q("c57", "deployments-7", WL, "apply", """
+In namespace {ns}, write the YAML for a Deployment named `api` (image `nginx`, 2 replicas) to `/opt/course/{ns}/d.yaml` without creating it, then apply that file.
+"""),
+    Q("c58", "jobs-cronjobs-3", WL, "create", """
+In namespace {ns}, write the YAML for a Job named `j1` (image `busybox`, command `sleep 10`) to `/opt/course/{ns}/job.yaml` without creating the Job.
+"""),
+    Q("c59", "namespaces-sa-3", CA, "apply", """
+In namespace {ns}, write the YAML for a ServiceAccount named `app-sa` to `/opt/course/{ns}/sa.yaml` without creating it, then apply that file.
+"""),
+    Q("c60", "services-6", NET, "get", """
+In namespace {ns}, write which Pod IPs are behind Service `web-svc` (the output of the command that shows its endpoints) to `/opt/course/{ns}/endpoints.txt`.
+"""),
+    Q("c61", "services-7", NET, "describe-grep", """
+In namespace {ns}, write the label selector that Service `web-svc` uses to `/opt/course/{ns}/selector.txt`.
+"""),
+    Q("c62", "networking-1", NET, "run", """
+In namespace {ns}, run a throwaway busybox Pod named `tmp` that fetches `http://web-svc` and prints the body, then deletes itself. Write what it printed to `/opt/course/{ns}/body.txt`.
+"""),
+    Q("c63", "networking-2", NET, "run", """
+In namespace {ns}, run a throwaway busybox Pod named `tmp` that looks up the DNS name of Service `web-svc`. Write what it printed to `/opt/course/{ns}/nslookup.txt`.
+"""),
+    Q("c64", "networking-4", NET, "get", """
+In namespace {ns}, Service `web-svc` exists. Write the Services of all namespaces to `/opt/course/{ns}/allsvc.txt`.
+"""),
+    Q("c65", "configmaps-secrets-2", WL, "create", """
+In namespace {ns}, the file `/opt/course/{ns}/config.properties` exists. Create a ConfigMap named `file-config` from it.
+"""),
+    Q("c66", "configmaps-secrets-4", WL, "get-format", """
+In namespace {ns}, write the decoded password stored in Secret `db-creds` to `/opt/course/{ns}/password.txt`.
+"""),
+    Q("c67", "namespaces-sa-5", CA, "create", """
+In namespace {ns}, ServiceAccount `app-sa` exists. Create a short-lived token for it and write the token to `/opt/course/{ns}/token.txt`.
+"""),
+    Q("c68", "namespaces-sa-6", CA, "get", """
+In namespace {ns}, write the list of everything in the namespace (pods, services, deployments and the rest that `all` covers) to `/opt/course/{ns}/all.txt`.
+"""),
+    Q("c69", "rbac-5", CA, "auth", """
+In namespace {ns}, check whether the user `jane` can `get` pods. Write the answer (`yes` or `no`) to `/opt/course/{ns}/canjane.txt`.
+"""),
+    Q("c70", "rbac-6", CA, "auth", """
+In namespace {ns}, ServiceAccount `app-sa` exists. Check whether it can `get` pods in {ns}. Write the answer (`yes` or `no`) to `/opt/course/{ns}/cansa.txt`.
+"""),
+    Q("c71", "rbac-7", CA, "auth", """
+In namespace {ns}, write everything the user `jane` is allowed to do (the full permission list) to `/opt/course/{ns}/janecan.txt`.
+"""),
+    Q("c72", "inspecting-1", TS, "get-format", """
+In namespace {ns}, write the list of the Pods with their node and IP to `/opt/course/{ns}/podswide.txt`.
+"""),
+    Q("c73", "inspecting-2", TS, "get", """
+In namespace {ns}, write the list of only the Pods that have the label `tier=frontend` to `/opt/course/{ns}/frontend.txt`.
+"""),
+    Q("c74", "inspecting-3", TS, "get", """
+In namespace {ns}, write the list of only the Pods whose phase is Running to `/opt/course/{ns}/running.txt`.
+"""),
+    Q("c75", "inspecting-4", TS, "get-format", """
+In namespace {ns}, write the full YAML of Pod `fe` as it exists in the cluster to `/opt/course/{ns}/fe.yaml`.
+"""),
+    Q("c76", "inspecting-5", TS, "logs-exec", """
+In namespace {ns}, write the logs of only the container named `sidecar` in Pod `mc` to `/opt/course/{ns}/sidecar.txt`.
+"""),
+    Q("c77", "inspecting-6", TS, "logs-exec", """
+In namespace {ns}, Pod `crash` was restarted once. Write the logs of its previous (crashed) container to `/opt/course/{ns}/previous.txt`.
+"""),
+    Q("c78", "inspecting-8", TS, "get", """
+In namespace {ns}, write only the Warning events to `/opt/course/{ns}/warnings.txt`.
+"""),
+    Q("c79", "jsonpath-1", TS, "get-format", """
+Write the names of all nodes on one line to `/opt/course/{ns}/nodes.txt`.
+"""),
+    Q("c80", "jsonpath-2", TS, "get-format", """
+Write the InternalIP of every node to `/opt/course/{ns}/ips.txt`.
+"""),
+    Q("c81", "jsonpath-3", TS, "get", """
+Write the kubelet version of every node to `/opt/course/{ns}/versions.txt`.
+"""),
+    Q("c82", "jsonpath-4", TS, "describe-grep", """
+In namespace {ns}, write the image of the first container of Pod `fe` to `/opt/course/{ns}/image.txt`.
+"""),
+    Q("c83", "jsonpath-5", TS, "get-format", """
+In namespace {ns}, write the Pods as two columns, NAME and NODE, to `/opt/course/{ns}/podnode.txt`. A header line is optional.
+"""),
+    Q("c84", "jsonpath-6", TS, "get", """
+In namespace {ns}, write the Pods sorted by creation time (oldest first) to `/opt/course/{ns}/bytime.txt`.
+"""),
+    Q("c85", "jsonpath-7", TS, "get-format", """
+In namespace {ns}, write the names of all Pods, one per line, to `/opt/course/{ns}/pods.txt` (either `pod/<name>` or just `<name>`).
+"""),
+    Q("c86", "scheduling-7", WL, "get-format", """
+In namespace {ns}, write which node each Pod is running on to `/opt/course/{ns}/podnodes.txt`.
+"""),
+    Q("c87", "storage-1", ST, "get", """
+In namespace {ns}, write the list of the PersistentVolumes, PersistentVolumeClaims (of {ns}) and StorageClasses to `/opt/course/{ns}/storage.txt`.
+"""),
+    Q("c88", "storage-5", ST, "describe", """
+In namespace {ns}, PersistentVolumeClaim `manual-pvc` asks for storageClassName `manual` and stays Pending. Find out why, and write the output of the command that shows the reason to `/opt/course/{ns}/why.txt`.
+"""),
+    Q("c89", "storage-6", ST, "get", """
+Write the name of the default StorageClass (or the `k get sc` output that shows it) to `/opt/course/{ns}/defaultsc.txt`.
+"""),
 ]
 BY_ID_QUESTION = {t["id"]: t for t in QUESTION_TASKS}
 assert len(BY_ID_QUESTION) == len(QUESTION_TASKS) and not set(BY_ID_QUESTION) & set(BY_ID_ALL), "duplicate task id"
