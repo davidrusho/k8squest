@@ -1,0 +1,1 @@
+--tcp=port:targetPort. Created this way it selects app=my-svc, so it has no endpoints until a pod has that label.

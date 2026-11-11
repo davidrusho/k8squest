@@ -303,6 +303,7 @@ PATTERNS = [
     {"id": "logs-exec", "name": "k logs|exec <name>"},
     {"id": "auth", "name": "k auth can-i <verb> <type>"},
     {"id": "config", "name": "k config <action>"},
+    {"id": "delete", "name": "k delete <type> <name>"},
     {"id": "lookup", "name": "Look it up in the docs"},
 ]
 PATTERN_IDS = {p["id"] for p in PATTERNS}
@@ -320,6 +321,55 @@ QUESTION_TASKS = [
     Q("c01", "services-1", NET, "expose", """
 In namespace {ns}, expose Deployment `web` as a ClusterIP Service named `web-svc` on port 80.
 """),
+    Q("c02", "services-2", NET, "expose", """
+In namespace {ns}, expose Deployment `web` as a NodePort Service named `web-np` on port 80. The Service must select the Deployment's Pods and have at least one endpoint address.
+"""),
+    Q("c03", "services-3", NET, "expose", """
+In namespace {ns}, expose Pod `fe` on port 80 as a ClusterIP Service named `fe-svc`. The Service must select Pod `fe` and have at least one endpoint address.
+"""),
+    Q("c04", "services-4", NET, "create", """
+In namespace {ns}, create a ClusterIP Service named `my-svc` that listens on TCP port 80 and sends traffic to target port 8080. It needs no endpoints.
+"""),
+    Q("c05", "services-5", NET, "create", """
+In namespace {ns}, create a NodePort Service named `np1` on TCP port 80 (target port 80) with node port 30777.
+"""),
+    Q("c06", "namespaces-sa-1", CA, "create", """
+Create a namespace named `exam-c06-dev`.
+""", renames={"devns": "exam-c06-dev"}, cluster_objects=["namespace/exam-c06-dev"]),
+    Q("c07", "namespaces-sa-2", CA, "create", """
+In namespace {ns}, create a ServiceAccount named `app-sa`.
+"""),
+    Q("c08", "namespaces-sa-4", CA, "set", """
+In namespace {ns}, make Deployment `web` run as ServiceAccount `app-sa`. The ServiceAccount already exists.
+"""),
+    Q("c09", "namespaces-sa-7", CA, "delete", """
+Delete the namespace `exam-c09-dev`, together with everything in it.
+""", renames={"devns": "exam-c09-dev"}, cluster_objects=["namespace/exam-c09-dev"]),
+    Q("c10", "rbac-1", CA, "create", """
+In namespace {ns}, create a Role named `pod-reader` with exactly one rule: verbs `get`, `list` and `watch` on Pods.
+"""),
+    Q("c11", "rbac-2", CA, "create", """
+In namespace {ns}, bind the existing Role `pod-reader` to the user `jane` with a RoleBinding named `read-pods`. `jane` must be the only subject.
+"""),
+    Q("c12", "rbac-3", CA, "create", """
+In namespace {ns}, bind the existing Role `pod-reader` to the ServiceAccount `app-sa` of the same namespace with a RoleBinding named `read-pods-sa`. The ServiceAccount must be the only subject.
+"""),
+    Q("c13", "rbac-4", CA, "create", """
+Create a ClusterRole named `exam-c13-node-reader` with exactly one rule: verbs `get`, `list` and `watch` on nodes. Bind it to the user `jane` with a ClusterRoleBinding named `exam-c13-read-nodes`. `jane` must be the only subject.
+""", renames={"node-reader": "exam-c13-node-reader", "read-nodes": "exam-c13-read-nodes"},
+      cluster_objects=["clusterrole/exam-c13-node-reader", "clusterrolebinding/exam-c13-read-nodes"]),
+    Q("c14", "rbac-8", CA, "create", """
+In namespace {ns}, create a Role named `deploy-mgr` with exactly one rule: verbs `create`, `get` and `list` on Deployments (API group `apps`).
+"""),
+    Q("c15", "networking-5", NET, "apply", """
+In namespace {ns}, create an ingress NetworkPolicy named `default-deny` that selects every Pod of the namespace and blocks all incoming traffic. Its only policy type must be Ingress.
+"""),
+    Q("c16", "networking-6", NET, "apply", """
+In namespace {ns}, create an ingress NetworkPolicy named `allow-client` so that Pods labelled `app=web` accept TCP port 80 only from Pods labelled `role=client` (of the same namespace). It must have exactly one ingress rule and its only policy type must be Ingress.
+"""),
+    Q("c17", "networking-7", NET, "apply", """
+In namespace {ns}, create an ingress NetworkPolicy named `allow-prod-ns` so that Pods labelled `app=web` accept TCP port 80 only from all Pods of the namespace `exam-c17-prod` (which already exists; select it with any label it carries, for example `kubernetes.io/metadata.name`, as long as no other namespace matches too). It must have exactly one ingress rule with exactly one `from` entry (a namespaceSelector, optionally with an empty podSelector), and its only policy type must be Ingress.
+""", renames={"prodns": "exam-c17-prod"}, cluster_objects=["namespace/exam-c17-prod"]),
 ]
 BY_ID_QUESTION = {t["id"]: t for t in QUESTION_TASKS}
 assert len(BY_ID_QUESTION) == len(QUESTION_TASKS) and not set(BY_ID_QUESTION) & set(BY_ID_ALL), "duplicate task id"

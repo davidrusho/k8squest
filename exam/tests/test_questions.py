@@ -1,5 +1,6 @@
 """Question tasks (drill-page questions turned into cluster tasks): drill-only, admission, paths, texts, e2e arg logic."""
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -26,7 +27,8 @@ class Admission(unittest.TestCase):
 
     def test_drill_pool_admits_by_status(self):
         q = pool.QUESTION_TASKS
-        self.assertEqual(pool.select_pool({"c01": {"verdict": "OK"}}, q), q)
+        self.assertEqual(pool.select_pool({"c01": {"verdict": "OK"}}, q), [pool.BY_ID_QUESTION["c01"]])
+        self.assertEqual(pool.select_pool({t["id"]: {"verdict": "OK"} for t in q}, q), q)
         self.assertEqual(pool.select_pool({}, q), [])
         self.assertEqual(pool.select_pool({"c01": {"verdict": "SOLUTION-DOES-NOT-PASS"}}, q), [])
 
@@ -213,6 +215,97 @@ class ReviewFixes(unittest.TestCase):
             cluster = FakeCluster()
             make(tmp, cluster)._remove_exam_namespaces()
         self.assertIn(["kubectl", "delete", "pv/drill-c98-data", "--ignore-not-found", "--wait=false"], cluster.calls)
+
+
+class AllQuestionTasks(unittest.TestCase):
+    FILES = ("broken.yaml", "validate.sh", "solution.sh", "hint-1.txt", "hint-2.txt", "hint-3.txt", "debrief.md")
+
+    def test_every_question_task_has_its_files_and_a_valid_pattern(self):
+        for t in pool.QUESTION_TASKS:
+            d = levels.level_dir(t["level"])
+            for f in self.FILES:
+                self.assertTrue((d / f).is_file() and (d / f).read_text().strip(), f"{t['id']}: {f}")
+            self.assertIn(t["pattern"], pool.PATTERN_IDS, t["id"])
+            self.assertIn("Pattern: ", (d / "hint-3.txt").read_text())
+
+    def test_ids_unique_and_contiguous(self):
+        ids = [t["id"] for t in pool.QUESTION_TASKS]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(ids, ["c%02d" % i for i in range(1, len(ids) + 1)])
+        self.assertEqual(len({t["qid"] for t in pool.QUESTION_TASKS}), len(ids))
+
+    def test_namespaces_and_cluster_objects_are_deletable_and_prefixed(self):
+        for t in pool.QUESTION_TASKS:
+            ns = pool.namespace(t["id"], "drill")
+            objs = pool.cluster_objects_for(t, "drill")
+            levels._check_deletable(ns, objs)
+            for name in pool.renames_for(t, "drill").values():
+                self.assertTrue(name.startswith(f"drill-{t['id']}-"), (t["id"], name))
+            for o in objs:
+                self.assertTrue(o.split("/", 1)[1].startswith(f"drill-{t['id']}-"), o)
+            # the sweep that exam start does covers the exam-prefixed names too
+            levels._check_deletable(pool.namespace(t["id"], "exam"), pool.cluster_objects_for(t, "exam"))
+
+    def test_rendered_text_has_no_leftover_dev_namespace_or_token(self):
+        for t in pool.QUESTION_TASKS:
+            body = pool.render_text(t, "h", "drill")["body"]
+            self.assertNotIn("{ns}", body, t["id"])
+            self.assertNotIn("k8squest", body, t["id"])
+            self.assertNotIn("exam-c", body, t["id"])
+            stripped = re.sub(r"drill-c\d+-[\w-]+", "", body)
+            self.assertIsNone(re.search(r"\bdev\b|\bprod\b(?!-ns)", stripped), (t["id"], body))
+            texts = levels.level_texts(t["level"], pool.namespace(t["id"], "drill"), pool.renames_for(t, "drill"))
+            for raw in texts["hints"] + [texts["solution"], texts["debrief"]]:
+                self.assertNotIn("k8squest", raw or "", t["id"])
+                self.assertNotRegex(raw or "", r"\b(devns|prodns)\b", t["id"])
+
+    def test_materialized_files_use_the_task_namespace_and_renames(self):
+        for t in pool.QUESTION_TASKS:
+            p = levels.materialize(t["level"], pool.namespace(t["id"], "drill"), pool.renames_for(t, "drill"))
+            try:
+                for f in ("broken.yaml", "validate.sh", "solution.sh"):
+                    txt = (p / f).read_text()
+                    self.assertNotIn("k8squest", txt, (t["id"], f))
+                    self.assertNotRegex(txt, r"\b(devns|prodns)\b", (t["id"], f))
+            finally:
+                levels.cleanup(p)
+
+    RAW = ("broken.yaml", "validate.sh", "solution.sh", "hint-1.txt", "hint-2.txt", "hint-3.txt", "debrief.md")
+
+    def test_every_rename_key_occurs_as_a_whole_token_in_a_raw_file(self):
+        for t in pool.QUESTION_TASKS:
+            d = levels.level_dir(t["level"])
+            raw = "\n".join((d / f).read_text() for f in self.RAW)
+            for old in t.get("renames", {}):
+                self.assertRegex(raw, r"(?<![\w-])" + re.escape(old) + r"(?![\w-])", (t["id"], old))
+
+    def test_created_namespaces_and_cluster_roles_are_in_cluster_objects(self):
+        pat = re.compile(r"kind:\s*(Namespace|ClusterRole|ClusterRoleBinding)\b[\s\S]*?\n\s*name:\s*(\S+)"
+                         r"|create\s+(ns|namespace|clusterrole|clusterrolebinding)\s+(\S+)")
+        kinds = {"ns": "namespace", "namespace": "namespace", "clusterrole": "clusterrole", "clusterrolebinding": "clusterrolebinding"}
+        for t in pool.QUESTION_TASKS:
+            d = levels.level_dir(t["level"])
+            ren = pool.renames_for(t, "drill")
+            have = {o.lower() for o in pool.cluster_objects_for(t, "drill")}
+            for f in ("broken.yaml", "solution.sh"):
+                for m in pat.finditer((d / f).read_text()):
+                    kind = (m.group(1) or m.group(3)).lower()
+                    name = m.group(2) or m.group(4)
+                    kind = kinds.get(kind, kind)
+                    name = ren.get(name, name)
+                    self.assertIn(f"{kind}/{name}".lower(), have, (t["id"], f, kind, name))
+
+    def test_hint_3_is_the_pattern_name(self):
+        names = {p["id"]: p["name"] for p in pool.PATTERNS}
+        for t in pool.QUESTION_TASKS:
+            h = (levels.level_dir(t["level"]) / "hint-3.txt").read_text().strip()
+            self.assertEqual(h, "Pattern: " + names[t["pattern"]], t["id"])
+
+    def test_c05_node_port_is_used_by_no_level(self):
+        self.assertIn("30777", pool.BY_ID_QUESTION["c05"]["text"])
+        for f in levels.WORLDS.rglob("*"):
+            if f.is_file() and f.suffix in (".yaml", ".yml", ".sh", ".md", ".txt"):
+                self.assertNotIn("30777", f.read_text(errors="replace"), str(f))
 
 
 if __name__ == "__main__":

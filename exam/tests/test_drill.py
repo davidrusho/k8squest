@@ -39,7 +39,7 @@ class DrillCase(unittest.TestCase):
     def test_state_lists_every_pool_task_without_revealing_text(self):
         st = self.drill.state()
         self.assertFalse(st["exam_live"])
-        self.assertEqual(len(st["tasks"]), len(pool.POOL))
+        self.assertEqual(len(st["tasks"]), len(pool.DRILL_POOL))
         self.assertEqual([d["name"] for d in st["domains"]][0], "Troubleshooting")
         t = next(x for x in st["tasks"] if x["id"] == self.tid)
         self.assertEqual(t["title"], "Pod `web-app` does not start.")
