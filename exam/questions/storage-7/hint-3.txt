@@ -1,0 +1,1 @@
+Pattern: k patch|edit <type> <name>

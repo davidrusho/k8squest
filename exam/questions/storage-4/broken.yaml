@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drill-scratch
+  namespace: k8squest
+data:
+  note: "nothing here is required by the task"

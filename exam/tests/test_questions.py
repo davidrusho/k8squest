@@ -288,9 +288,10 @@ class AllQuestionTasks(unittest.TestCase):
                 self.assertRegex(raw, r"(?<![\w-])" + re.escape(old) + r"(?![\w-])", (t["id"], old))
 
     def test_created_namespaces_and_cluster_roles_are_in_cluster_objects(self):
-        pat = re.compile(r"kind:\s*(Namespace|ClusterRole|ClusterRoleBinding)\b[\s\S]*?\n\s*name:\s*(\S+)"
+        pat = re.compile(r"kind:\s*(Namespace|ClusterRole|ClusterRoleBinding|PersistentVolume|StorageClass)\b[\s\S]*?\n\s*name:\s*(\S+)"
                          r"|create\s+(ns|namespace|clusterrole|clusterrolebinding)\s+(\S+)")
-        kinds = {"ns": "namespace", "namespace": "namespace", "clusterrole": "clusterrole", "clusterrolebinding": "clusterrolebinding"}
+        kinds = {"ns": "namespace", "namespace": "namespace", "clusterrole": "clusterrole", "clusterrolebinding": "clusterrolebinding",
+                 "persistentvolume": "pv", "storageclass": "storageclass"}
         for t in pool.QUESTION_TASKS:
             d = levels.level_dir(t["level"])
             ren = pool.renames_for(t, "drill")

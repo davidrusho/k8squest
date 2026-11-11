@@ -452,6 +452,18 @@ In namespace {ns}, create a Pod named `pref` (image `nginx`) that prefers, but d
     Q("c44", "scheduling-5", WL, "apply", """
 In namespace {ns}, create a Pod named `pinned` (image `nginx`) that runs on node `k8squest-control-plane` by name (`spec.nodeName`), skipping the scheduler. It must not use a `nodeSelector` or affinity.
 """),
+    Q("c45", "storage-2", ST, "apply", """
+In namespace {ns}, create a PersistentVolumeClaim named `data-pvc` that requests `500Mi` with access mode `ReadWriteOnce`, using the cluster's default StorageClass (leave `storageClassName` unset, or set it to `standard`). The claim may stay Pending until a Pod uses it.
+"""),
+    Q("c46", "storage-3", ST, "apply", """
+In namespace {ns}, create a Pod named `pvcpod` (image `nginx`) that mounts the existing PersistentVolumeClaim `data-pvc` at `/data`.
+"""),
+    Q("c47", "storage-4", ST, "apply", """
+Create a PersistentVolume named `exam-c47-pv1` with capacity `1Gi`, access mode `ReadWriteOnce`, storageClassName `manual` and hostPath `/mnt/data`.
+""", renames={"pv1": "exam-c47-pv1"}, cluster_objects=["pv/exam-c47-pv1"]),
+    Q("c48", "storage-7", ST, "patch-edit", """
+Change the reclaim policy of the existing PersistentVolume `exam-c48-pv1` to `Retain`. Leave the rest of the PersistentVolume unchanged.
+""", renames={"pv1": "exam-c48-pv1"}, cluster_objects=["pv/exam-c48-pv1"]),
 ]
 BY_ID_QUESTION = {t["id"]: t for t in QUESTION_TASKS}
 assert len(BY_ID_QUESTION) == len(QUESTION_TASKS) and not set(BY_ID_QUESTION) & set(BY_ID_ALL), "duplicate task id"
