@@ -22,6 +22,8 @@
   let dpay = {};           // drill task id -> last payload
   let dstart = {};         // drill task id -> performance.now() when it was opened (client-side only)
   let dfilter = "all";
+  let dgroup = "domain";
+  try { if (localStorage.getItem("cka-drill-group") === "pattern") dgroup = "pattern"; } catch (e) { /* storage unavailable */ }
   let dbusy = false;
 
   // ------------------------------------------------------------------ helpers
@@ -361,17 +363,26 @@
     const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
     const chips = [["all", "All"], ["unsolved", "Not solved"], ["failed", "Failed in an exam"]].map(([k, label]) =>
       el("button", { class: dfilter === k ? "on" : "", text: label, onclick: () => { dfilter = k; renderDrill(); } }));
-    const kids = [el("div", { class: "filter" }, ...chips)];
+    const groups = ["domain", "pattern"].map((k) =>
+      el("button", { class: dgroup === k ? "on" : "", text: k === "domain" ? "By domain" : "By pattern", onclick: () => {
+        dgroup = k;
+        try { localStorage.setItem("cka-drill-group", k); } catch (e) { /* storage unavailable */ }
+        renderDrill();
+      } }));
+    const kids = [el("div", { class: "filter groupsw" }, ...groups), el("div", { class: "filter" }, ...chips)];
     const keep = (t) => (dfilter === "unsolved" ? !t.solved : dfilter === "failed" ? t.failed_in_exam : true);
     let shown = 0;
-    for (const dom of D.domains) {
-      const all = D.tasks.filter((t) => t.domain === dom.name);
+    const sections = dgroup === "pattern"
+      ? [...(D.patterns || []).map((p) => [p.name, D.tasks.filter((t) => t.pattern === p.id)]),
+         ["Scenario tasks (no single command)", D.tasks.filter((t) => !t.pattern)]]
+      : D.domains.map((dom) => [dom.name, D.tasks.filter((t) => t.domain === dom.name)]);
+    for (const [name, all] of sections) {
       if (!all.length) continue;
       const rows = all.filter(keep);
       shown += rows.length;
       if (!rows.length) continue;
       const solved = all.filter((t) => t.solved).length;
-      kids.push(el("div", { class: "dom-h" }, el("span", { text: dom.name }),
+      kids.push(el("div", { class: "dom-h" }, el("span", { text: name }),
         el("small", { text: solved + " of " + all.length + " solved · " + pct(solved, all.length) + "%" })));
       for (const t of rows) {
         kids.push(el("div", { class: "trow", role: "button", tabindex: "0", onclick: () => openDrill(t.id) },
@@ -387,7 +398,8 @@
   function nextInDomain(id) {
     const t = dTask(id);
     if (!t) return null;
-    const same = D.tasks.filter((x) => x.domain === t.domain);
+    // follows the picker's grouping: same pattern group in pattern view, same domain otherwise
+    const same = D.tasks.filter((x) => (dgroup === "pattern" ? (x.pattern || null) === (t.pattern || null) : x.domain === t.domain));
     const i = same.findIndex((x) => x.id === id);
     return i >= 0 && i < same.length - 1 ? same[i + 1].id : null;
   }

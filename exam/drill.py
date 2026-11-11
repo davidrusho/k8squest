@@ -70,9 +70,9 @@ class Drill:
             raise Locked("An exam session is running. End the exam to use Drill.")
 
     def _task(self, tid):
-        if tid not in pool.BY_ID:
+        if tid not in pool.DRILL_BY_ID:
             raise KeyError(tid)
-        return pool.BY_ID[tid]
+        return pool.DRILL_BY_ID[tid]
 
     def _failed_in_exam(self, tid):
         att = self.results.attempts(tid)
@@ -94,10 +94,11 @@ class Drill:
         return out if out is not None and (r["last_passed"] or r["hints_revealed"] >= 3) else None
 
     def _view(self, tid):
-        t = pool.BY_ID[tid]
+        t = pool.DRILL_BY_ID[tid]
         r = self._rec(tid)
         st, label = self._status(r, tid)
         return {"id": tid, "domain": t["domain"], "title": pool.drill_title(t), "status": st, "status_label": label,
+                "pattern": t.get("pattern"), "source": t.get("source", "exam"),
                 "failed_in_exam": self._failed_in_exam(tid), "opened": r["opened"], "deployed": r["deployed"],
                 "attempts": r["attempts"], "solved": r["solved"], "solved_at": r["solved_at"],
                 "hints_revealed": r["hints_revealed"], "last_output": self._shown(r, r["last_output"]),
@@ -106,7 +107,7 @@ class Drill:
 
     def _texts(self, tid):
         """Everything revealed so far: hints (list of strings), solution, debrief (None until earned)."""
-        t, r = pool.BY_ID[tid], self._rec(tid)
+        t, r = pool.DRILL_BY_ID[tid], self._rec(tid)
         raw = levels.level_texts(t["level"], pool.namespace(tid, KIND), pool.renames_for(t, KIND))
         n = r["hints_revealed"]
         hints = [(raw["hints"][i] or HINT_MISSING) for i in range(min(n, 3))]
@@ -124,16 +125,18 @@ class Drill:
     def _payload(self, tid, host="cka1"):
         v = self._view(tid)
         v.update(self._texts(tid))
-        v.update({"text": pool.render_text(pool.BY_ID[tid], host, KIND), "namespace": pool.namespace(tid, KIND)})
+        v.update({"text": pool.render_text(pool.DRILL_BY_ID[tid], host, KIND), "namespace": pool.namespace(tid, KIND)})
         return v
 
     # ---- API
     def state(self):
         with self.lock:
             live = bool(self.exam_live())
+            used = {t.get("pattern") for t in pool.DRILL_POOL}
             return {"exam_live": live,
                     "domains": [{"name": d, "weight": w} for d, w in sorted(DOMAIN_WEIGHTS.items(), key=lambda kv: -kv[1])],
-                    "tasks": [self._view(t["id"]) for t in pool.POOL]}
+                    "patterns": [p for p in pool.PATTERNS if p["id"] in used],
+                    "tasks": [self._view(t["id"]) for t in pool.DRILL_POOL]}
 
     def _deploy(self, t):
         """Fresh broken state in the drill namespace. First clears the same task's exam leftovers (t22's node port and

@@ -52,37 +52,60 @@ def prove(rel, ns, renames, cluster_objects=(), poll=90, settle=8, extra=()):
     return res
 
 
+def status_key(task_id, ns):
+    """The e2e-status.json key: the task id (c01, t22), never derived by stripping a namespace prefix when the id is known."""
+    return task_id or re.sub(r"^(exam|drill)-", "", ns, count=1)
+
+
+def check_args(kind, write_status, wanted, explore):
+    """An error message for an invalid argument combination, else None. No cluster access.
+    Question tasks (c01...) are drill-only: never --kind exam. --write-status under --kind drill is allowed
+    only when every selected job is a question task (that is how a drill-only task gets proven)."""
+    import pool
+    qids = {t["id"] for t in pool.QUESTION_TASKS}
+    if kind == "exam" and wanted & qids:
+        return "question tasks (%s) are drill-only: use --kind drill" % ", ".join(sorted(wanted & qids))
+    if kind == "drill" and write_status:
+        if explore or not wanted or not wanted <= qids:
+            return ("--write-status under --kind drill is only valid when every selected task is a "
+                    "question task (--tasks c01,...); exam tasks are proven with --kind exam")
+    return None
+
+
 def main():
     levels.install_signal_cleanup()
     ap = argparse.ArgumentParser()
     ap.add_argument("tasks", nargs="*")
     ap.add_argument("--tasks", dest="task_list", default="", help="comma separated task ids, e.g. t22,t30,t45")
     ap.add_argument("--kind", choices=("exam", "drill"), default="exam",
-                    help="namespace / object prefix to prove under; drill never writes e2e-status.json")
+                    help="namespace / object prefix to prove under; drill writes e2e-status.json only for question-only runs")
     ap.add_argument("--level")
     ap.add_argument("--ns")
     ap.add_argument("--poll", type=int, default=90)
     ap.add_argument("--write-status", action="store_true", help="record verdicts in e2e-status.json (drops failing tasks from the pool)")
     ap.add_argument("--keep", action="store_true", help="do not clean up afterwards")
     a = ap.parse_args()
-    if a.kind == "drill" and a.write_status:
-        ap.error("--write-status records the pool and is only valid with --kind exam")
     wanted = set(a.tasks) | {x.strip() for x in a.task_list.split(",") if x.strip()}
+    err = check_args(a.kind, a.write_status, wanted, bool(a.level))
+    if err:
+        ap.error(err)
     jobs = []
     if a.level:
         name = a.level.rstrip("/").split("/")[-1]
         m = re.search(r"level-(\d+)", name)
         ns = a.ns or f"{a.kind}-t{int(m.group(1)):02d}"
-        jobs.append((a.level, ns, {o: n.replace("exam-", a.kind + "-", 1) for o, n in EXPLORE_RENAMES.get(name, {}).items()}, (), ()))
+        jobs.append((a.level, ns, {o: n.replace("exam-", a.kind + "-", 1) for o, n in EXPLORE_RENAMES.get(name, {}).items()}, (), (), None))
     else:
         import pool
-        for t in pool.ALL_TASKS:
+        for t in pool.ALL_TASKS + pool.QUESTION_TASKS:
             if wanted and t["id"] not in wanted:
                 continue
+            if a.kind == "exam" and t.get("source") == "question":      # drill-only
+                continue
             jobs.append((t["level"], pool.namespace(t["id"], a.kind), pool.renames_for(t, a.kind),
-                         pool.cluster_objects_for(t, a.kind), t.get("solution_extra", ())))
+                         pool.cluster_objects_for(t, a.kind), t.get("solution_extra", ()), t["id"]))
     bad = 0
-    for rel, ns, ren, co, ex in jobs:
+    for rel, ns, ren, co, ex, tid_of in jobs:
         r = prove(rel, ns, ren, co, poll=a.poll, extra=ex)
         print(f"{r['verdict']:24} {rel}  ns={ns}", flush=True)
         if r["verdict"] != "OK":
@@ -97,7 +120,7 @@ def main():
                 st = json.loads(sp.read_text())
             except (OSError, ValueError):
                 st = {}
-            tid = ns.replace("exam-", "", 1)
+            tid = status_key(tid_of, ns)
             st[tid] = {"verdict": r["verdict"], "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                        "detail": "" if r["verdict"] == "OK" else str({k: r[k] for k in ("deploy", "pre", "solution", "post") if k in r})[:600]}
             sp.write_text(json.dumps(st, indent=2, sort_keys=True))

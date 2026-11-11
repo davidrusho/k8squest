@@ -159,8 +159,9 @@ class Exam:
             r = self.cluster.run(["kubectl", "delete", "namespace", ns, "--wait=false", "--ignore-not-found"], timeout=60)
             if r.returncode:
                 warn.append(f"could not delete namespace {ns}: " + (r.stderr or r.stdout).strip()[-200:])
-        for t in pool.POOL:
-            for obj in pool.cluster_objects_for(t, "exam") + pool.cluster_objects_for(t, "drill"):
+        for t in pool.POOL + pool.QUESTION_TASKS:      # question tasks exist only under drill-, swept regardless of admission
+            kinds = ("drill",) if t.get("source") == "question" else ("exam", "drill")
+            for obj in [o for k in kinds for o in pool.cluster_objects_for(t, k)]:
                 r = self.cluster.run(["kubectl", "delete", obj, "--ignore-not-found", "--wait=false"], timeout=60)
                 if r.returncode:
                     warn.append(f"could not delete {obj}: " + (r.stderr or r.stdout).strip()[-200:])

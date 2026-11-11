@@ -154,6 +154,7 @@ pre { margin: 0; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, 
 .trow .nm { flex: 1; min-width: 0; }
 .filter { display: flex; gap: 6px; margin-bottom: 12px; }
 .filter button { border: 1px solid #b6c2cf; background: #fff; border-radius: 12px; padding: 2px 10px; font-size: 12.5px; }
+.filter.groupsw button { border-radius: 4px; }
 .filter button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
 .hints { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
 .hints h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }

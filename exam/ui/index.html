@@ -71,10 +71,10 @@
     <div id="pane-readme" class="pane">
       <div class="readme" id="readme-drill" hidden>
         <h2>Drill mode</h2>
-        <p>Untimed practice, one task at a time. The task list is on the left, grouped by exam domain.</p>
+        <p>Untimed practice, one task at a time. The task list is on the left, grouped by exam domain or, with <b>By pattern</b>, by the kubectl command shape a task drills.</p>
         <ul>
           <li>Open the <b>Remote Desktop</b> tab, open a terminal, then <code>ssh cka1</code>. Every drill task runs on <code>cka1</code>.</li>
-          <li>Each task has its own namespace, <code>drill-tNN</code>. The task text gives it. The first time you open a task its broken environment is built.</li>
+          <li>Each task has its own namespace, <code>drill-tNN</code> (or <code>drill-cNN</code> for a short command question). The task text gives it. The first time you open a task its broken environment is built.</li>
           <li><b>Check</b> grades the task at once. There is no timer and nothing here counts towards the mock exam.</li>
           <li><b>Stuck?</b> reveals Hint 1, Hint 2, Hint 3 and then the solution, in that order. Revealed hints stay on screen. After a pass, or after the solution, a debrief appears.</li>
           <li><b>Reset task</b> deletes the task's namespace and rebuilds the broken state. Attempts, solved and revealed hints are kept.</li>

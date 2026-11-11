@@ -17,6 +17,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 WORLDS = REPO / "worlds"
+QUESTIONS = REPO / "exam" / "questions"
 KUBE_CONTEXT = os.environ.get("EXAM_KUBE_CONTEXT", "kind-k8squest")
 TEXT_SUFFIXES = {".yaml", ".yml", ".sh", ".txt", ".md", ".json", ""}
 
@@ -40,11 +41,19 @@ def rewrite_text(text, namespace, renames=None):
     return text
 
 
+def is_question(rel):
+    return isinstance(rel, str) and rel.startswith("questions/")
+
+
 def level_dir(rel):
-    p = (WORLDS / rel).resolve()
-    if WORLDS.resolve() not in p.parents or not p.is_dir():
+    root, sub = (QUESTIONS, rel[len("questions/"):]) if is_question(rel) else (WORLDS, rel)
+    p = (root / sub).resolve()
+    if root.resolve() not in p.parents or not p.is_dir():
         raise ValueError(f"no such level: {rel}")
     return p
+
+
+_ROOTS = set()      # temp trees materialize() created; cleanup() removes only these
 
 
 def materialize(rel, namespace, renames=None, dest=None):
@@ -54,6 +63,14 @@ def materialize(rel, namespace, renames=None, dest=None):
     file. Returns the Path of the level copy. Caller removes it with cleanup()."""
     src = level_dir(rel)
     root = Path(dest) if dest else Path(tempfile.mkdtemp(prefix="exam-lvl-"))
+    _ROOTS.add(root.resolve())
+    if is_question(rel):        # a question task is one directory: <tmp>/questions/<qid>
+        qroot = root / "questions"
+        qroot.mkdir(parents=True)
+        out = qroot / src.name
+        shutil.copytree(src, out, symlinks=False)
+        _rewrite_tree(qroot, namespace, renames)
+        return out
     wroot = root / "worlds"
     wdir = wroot / src.parent.name
     wdir.mkdir(parents=True)
@@ -66,7 +83,12 @@ def materialize(rel, namespace, renames=None, dest=None):
             shutil.copy2(src.parent / extra, wdir / extra)
     out = wdir / src.name
     shutil.copytree(src, out, symlinks=False)
-    for f in wroot.rglob("*"):
+    _rewrite_tree(wroot, namespace, renames)
+    return out
+
+
+def _rewrite_tree(tree, namespace, renames):
+    for f in tree.rglob("*"):
         if f.is_file() and f.suffix in TEXT_SUFFIXES:
             try:
                 t = f.read_text()
@@ -75,11 +97,16 @@ def materialize(rel, namespace, renames=None, dest=None):
             n = rewrite_text(t, namespace, renames)
             if n != t:
                 f.write_text(n)
-    return out
 
 
 def cleanup(path):
-    shutil.rmtree(Path(path).parents[2], ignore_errors=True)
+    """Remove the whole temp tree: <tmp>/worlds/<world>/<level> (3 deep) or <tmp>/questions/<qid> (2 deep)."""
+    path = Path(path)
+    root = (path.parents[1] if path.parent.name == "questions" else path.parents[2]).resolve()
+    if root not in _ROOTS:
+        raise ValueError(f"refusing to remove {root}: not a temp tree created by materialize()")
+    _ROOTS.discard(root)
+    shutil.rmtree(root, ignore_errors=True)
 
 
 _PINNED = {}
@@ -244,15 +271,21 @@ def level_texts(rel, namespace, renames=None):
             return rewrite_text((src / name).read_text(), namespace, renames).strip()
         except (OSError, UnicodeDecodeError):
             return None
-    return {"hints": [read(f"hint-{i}.txt") for i in (1, 2, 3)], "solution": read("solution.yaml"),
+    return {"hints": [read(f"hint-{i}.txt") for i in (1, 2, 3)],
+            "solution": read("solution.sh") if is_question(rel) else read("solution.yaml"),
             "debrief": read("debrief.md")}
 
 
 def apply_solution(rel, namespace, renames=None, extra=()):
-    """Apply the level's solution.yaml (rewritten). Used by the e2e proof only.
+    """Apply the level's solution.yaml (rewritten), or run its solution.sh for a question task. Used by the e2e proof only.
     Falls back to `replace --force` when apply is refused (immutable fields)."""
     lvl = materialize(rel, namespace, renames)
     try:
+        if is_question(rel) and (lvl / "solution.sh").is_file():     # a question task: the answer is commands, not a manifest
+            for cmd in extra:
+                run(["kubectl"] + [a.replace("{ns}", namespace) for a in cmd], timeout=120)
+            r = run(["bash", "solution.sh"], cwd=str(lvl), timeout=180, env=kenv(namespace))
+            return r.returncode == 0, (r.stderr or r.stdout).strip()[-300:]
         sol = str(lvl / "solution.yaml")
         for cmd in extra:       # documented manual steps the yaml cannot express, e.g. deleting the old ReplicaSet
             run(["kubectl"] + [a.replace("{ns}", namespace) for a in cmd], timeout=120)

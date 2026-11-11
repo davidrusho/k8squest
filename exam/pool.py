@@ -31,7 +31,7 @@ def T(id, level, domain, text, renames=None, cluster_objects=(), solution_extra=
     return {"id": id, "level": level, "domain": domain, "text": text.strip(),
             "renames": renames or {}, "cluster_objects": list(cluster_objects),
             "solution_extra": [list(c) for c in solution_extra],
-            "node_reset": node_reset}
+            "node_reset": node_reset, "pattern": None}
 
 
 ALL_TASKS = [
@@ -285,6 +285,45 @@ Fix it so that `reports-sa` can list ConfigMaps in {ns} and has no permission be
 BY_ID_ALL = {t["id"]: t for t in ALL_TASKS}
 assert len(BY_ID_ALL) == len(ALL_TASKS), "duplicate task id"
 
+# The command patterns of the drill page, in display order. A question task names exactly one.
+PATTERNS = [
+    {"id": "describe-grep", "name": "k describe <type> <name> | grep <word>"},
+    {"id": "describe", "name": "k describe <type> <name>"},
+    {"id": "get-format", "name": "k get <type> -o <format>"},
+    {"id": "get", "name": "k get <type> <name>"},
+    {"id": "create", "name": "k create <type> <name> ..."},
+    {"id": "run", "name": "k run <name> --image=<image> ..."},
+    {"id": "set", "name": "k set <what> deploy <name> ..."},
+    {"id": "rollout", "name": "k rollout <action> deploy/<name>"},
+    {"id": "expose", "name": "k expose <type> <name> --port=<port>"},
+    {"id": "label-taint", "name": "k label|taint <type> <name> <change>"},
+    {"id": "node-maint", "name": "k cordon|uncordon|drain <node>"},
+    {"id": "patch-edit", "name": "k patch|edit <type> <name>"},
+    {"id": "apply", "name": "k apply -f <file>"},
+    {"id": "logs-exec", "name": "k logs|exec <name>"},
+    {"id": "auth", "name": "k auth can-i <verb> <type>"},
+    {"id": "config", "name": "k config <action>"},
+    {"id": "lookup", "name": "Look it up in the docs"},
+]
+PATTERN_IDS = {p["id"] for p in PATTERNS}
+
+
+def Q(id, qid, domain, pattern, text, renames=None, cluster_objects=(), solution_extra=(), node_reset=False):
+    """A short-kubectl-question task from the drill page. Its directory is exam/questions/<qid>/. Drill-only."""
+    assert pattern in PATTERN_IDS, f"{id}: unknown pattern {pattern!r}"
+    t = T(id, f"questions/{qid}", domain, text, renames, cluster_objects, solution_extra, node_reset)
+    t.update({"source": "question", "qid": qid, "pattern": pattern})
+    return t
+
+
+QUESTION_TASKS = [
+    Q("c01", "services-1", NET, "expose", """
+In namespace {ns}, expose Deployment `web` as a ClusterIP Service named `web-svc` on port 80.
+"""),
+]
+BY_ID_QUESTION = {t["id"]: t for t in QUESTION_TASKS}
+assert len(BY_ID_QUESTION) == len(QUESTION_TASKS) and not set(BY_ID_QUESTION) & set(BY_ID_ALL), "duplicate task id"
+
 
 def namespace(task_id, kind="exam"):
     """Task namespace: exam-<id> for the mock exam, drill-<id> for Drill mode."""
@@ -341,6 +380,17 @@ def _pool():
 
 POOL = _pool()
 BY_ID = {t["id"]: t for t in POOL}
+
+
+def _drill_pool():
+    """What Drill offers: the proven exam tasks plus the question tasks (drill-only) whose own verdict is OK."""
+    if os.environ.get("EXAM_ALLOW_UNPROVEN") == "1":
+        return list(POOL) + list(QUESTION_TASKS)
+    return list(POOL) + select_pool(load_status(), QUESTION_TASKS)
+
+
+DRILL_POOL = _drill_pool()
+DRILL_BY_ID = {t["id"]: t for t in DRILL_POOL}
 
 
 def render_text(task, host, kind="exam"):
