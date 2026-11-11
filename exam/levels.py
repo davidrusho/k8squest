@@ -156,13 +156,18 @@ def run(args, timeout=120, cwd=None, input=None, env=None):
         return subprocess.CompletedProcess(args, 127, "", f"{args[0]} not found")
 
 
+TASK_PREFIXES = ("exam-", "drill-")
+
+
 def _check_deletable(namespace, cluster_objects):
-    """Validate every argument before anything is deleted."""
-    if not isinstance(namespace, str) or not namespace.startswith("exam-"):
-        raise ValueError(f"refusing to delete namespace {namespace!r}: not an exam namespace")
+    """Validate every argument before anything is deleted: an exam- or drill- namespace, and cluster-scoped
+    objects carrying the same prefix."""
+    if not isinstance(namespace, str) or not namespace.startswith(TASK_PREFIXES):
+        raise ValueError(f"refusing to delete namespace {namespace!r}: not an exam or drill namespace")
+    prefix = "exam-" if namespace.startswith("exam-") else "drill-"
     for obj in cluster_objects:
-        if not isinstance(obj, str) or "/" not in obj or not obj.split("/", 1)[1].startswith("exam-"):
-            raise ValueError(f"refusing to delete {obj!r}: not an exam-prefixed object")
+        if not isinstance(obj, str) or "/" not in obj or not obj.split("/", 1)[1].startswith(prefix):
+            raise ValueError(f"refusing to delete {obj!r}: not a {prefix}prefixed object")
 
 
 def delete_task_objects(namespace, cluster_objects=()):
@@ -227,6 +232,20 @@ def validate(rel, namespace, renames=None, timeout=120):
         return r.returncode == 0, out.strip()
     finally:
         cleanup(lvl)
+
+
+def level_texts(rel, namespace, renames=None):
+    """The level's player-facing text, rewritten like the deployed copy: {"hints": [h1, h2, h3], "solution", "debrief"}.
+    A missing file gives None. Reads files only; the level directory is never modified."""
+    src = level_dir(rel)
+
+    def read(name):
+        try:
+            return rewrite_text((src / name).read_text(), namespace, renames).strip()
+        except (OSError, UnicodeDecodeError):
+            return None
+    return {"hints": [read(f"hint-{i}.txt") for i in (1, 2, 3)], "solution": read("solution.yaml"),
+            "debrief": read("debrief.md")}
 
 
 def apply_solution(rel, namespace, renames=None, extra=()):

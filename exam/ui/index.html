@@ -10,6 +10,10 @@
 <header id="top">
   <div id="top-left">
     <span class="brand">CKA</span>
+    <div class="modes" id="modes" role="group" aria-label="Mode">
+      <button id="mode-drill" class="">Drill</button>
+      <button id="mode-exam" class="on">Mock exam</button>
+    </div>
     <span class="candidate">candidate</span>
     <button class="icon" id="btn-help" title="Help: open the Readme tab" aria-label="Help">?</button>
     <button class="icon" id="btn-globe" title="Language: English" aria-label="Language">&#127760;</button>
@@ -20,7 +24,7 @@
       <button role="tab" id="tab-desktop" data-tab="desktop" class="tab" aria-selected="false">Remote Desktop</button>
     </nav>
     <span class="spacer"></span>
-    <button id="btn-end" class="end">End exam</button>
+    <button id="btn-end" class="end exam-only">End exam</button>
     <div class="cog-wrap">
       <button class="icon" id="btn-cog" aria-label="Settings" aria-haspopup="true">&#9881;</button>
       <div id="cog-menu" hidden>
@@ -34,8 +38,14 @@
 
 <main id="main">
   <section id="content" aria-label="Content panel">
-    <div id="timerbar" class="timer green"><span id="timer-text">Time remaining: 7 min 30 s</span></div>
-    <div id="taskbar">
+    <div id="drillbar" class="drillbar drill-only" hidden><b>Drill · untimed</b><span id="drill-side"></span></div>
+    <div id="timerbar" class="timer green exam-only"><span id="timer-text">Time remaining: 7 min 30 s</span></div>
+    <div id="drill-taskbar" class="drill-only" hidden>
+      <button id="drill-back" class="arrow">&larr; All tasks</button>
+      <span id="drill-crumb" class="crumb"></span>
+      <button id="drill-next-arrow" class="arrow" title="Next task in this domain" aria-label="Next task in this domain">&rarr;</button>
+    </div>
+    <div id="taskbar" class="exam-only">
       <div class="dropdown">
         <button id="task-select" aria-haspopup="listbox"><span class="hamb">&#9776;</span> <span id="task-label">Task 1 of 16</span> <span class="caret">&#9662;</span></button>
         <ul id="task-list" role="listbox" hidden></ul>
@@ -47,7 +57,11 @@
     <div id="body">
       <div id="screen"></div>
     </div>
-    <footer id="actions">
+    <footer id="drill-actions" class="drill-only" hidden>
+      <button id="drill-reset" class="secondary">Reset task</button>
+      <button id="drill-next" class="primary">Next task &rarr;</button>
+    </footer>
+    <footer id="actions" class="exam-only">
       <button id="btn-flag" class="secondary">Flag this to return to later</button>
       <button id="btn-satisfied" class="primary">I am satisfied, next &rarr;</button>
     </footer>
@@ -55,7 +69,19 @@
   <div id="divider" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
   <section id="right" aria-label="Environment">
     <div id="pane-readme" class="pane">
-      <div class="readme">
+      <div class="readme" id="readme-drill" hidden>
+        <h2>Drill mode</h2>
+        <p>Untimed practice, one task at a time. The task list is on the left, grouped by exam domain.</p>
+        <ul>
+          <li>Open the <b>Remote Desktop</b> tab, open a terminal, then <code>ssh cka1</code>. Every drill task runs on <code>cka1</code>.</li>
+          <li>Each task has its own namespace, <code>drill-tNN</code>. The task text gives it. The first time you open a task its broken environment is built.</li>
+          <li><b>Check</b> grades the task at once. There is no timer and nothing here counts towards the mock exam.</li>
+          <li><b>Stuck?</b> reveals Hint 1, Hint 2, Hint 3 and then the solution, in that order. Revealed hints stay on screen. After a pass, or after the solution, a debrief appears.</li>
+          <li><b>Reset task</b> deletes the task's namespace and rebuilds the broken state. Attempts, solved and revealed hints are kept.</li>
+          <li>Drill is locked while a mock exam session is running. End the exam to switch back to it.</li>
+        </ul>
+      </div>
+      <div class="readme" id="readme-exam">
         <h2>Exam environment</h2>
         <p>This is a practice version of the CKA exam interface. The task panel is on the left; this area holds the environment.</p>
         <h3>How to work</h3>

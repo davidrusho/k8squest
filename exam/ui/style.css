@@ -133,3 +133,41 @@ pre { margin: 0; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, 
 
 .syncwarn { color: #9c241c; background: #fdeceb; border: 1px solid #eca29d; border-radius: 4px; padding: 2px 8px; font-size: 12px; }
 .syncwarn[hidden] { display: none; }
+
+/* Drill mode. Visibility is the `hidden` attribute, set for every exam-only / drill-only element by applyChrome() in app.js. */
+.modes { display: flex; background: #071d34; border-radius: 6px; padding: 2px; gap: 2px; }
+.modes button { background: transparent; border: 0; color: #b9c9db; padding: 4px 12px; border-radius: 4px; font-size: 13px; }
+.modes button.on { background: #fff; color: var(--navy); font-weight: 600; }
+.modes button:disabled { color: #6c819a; cursor: not-allowed; opacity: 1; }
+#drill-taskbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex: none; }
+#drill-actions { display: flex; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); flex: none; background: #f7f9fb; }
+#drillbar { display: flex; }
+#timerbar[hidden], #taskbar[hidden], #actions[hidden], #btn-end[hidden], #drillbar[hidden], #drill-taskbar[hidden], #drill-actions[hidden], .readme[hidden] { display: none !important; }
+.drillbar { padding: 8px 16px; color: #fff; background: #3d5a80; flex: none; justify-content: space-between; }
+.drillbar span { font-weight: 400; opacity: .85; }
+.dom-h { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; margin: 14px 0 4px; padding-bottom: 3px; border-bottom: 1px solid var(--line); }
+.dom-h:first-of-type { margin-top: 0; }
+.dom-h small { color: var(--muted); font-weight: 400; white-space: nowrap; }
+.trow { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 4px; cursor: pointer; }
+.trow:hover { background: #eef4fa; }
+.trow .id { width: 34px; flex: none; color: var(--muted); font: 12px ui-monospace, Menlo, monospace; }
+.trow .nm { flex: 1; min-width: 0; }
+.filter { display: flex; gap: 6px; margin-bottom: 12px; }
+.filter button { border: 1px solid #b6c2cf; background: #fff; border-radius: 12px; padding: 2px 10px; font-size: 12.5px; }
+.filter button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.hints { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.hints h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.hintbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.hintbtns button { background: #fff; border: 1px solid #b6c2cf; border-radius: 4px; padding: 5px 12px; }
+.hintbtns button.used { background: #fff7e3; border-color: #f0cf8c; cursor: default; }
+.hintbtns button.danger-ish { color: #9c241c; }
+.hintcard { background: #fff7e3; border: 1px solid #f0cf8c; border-radius: 4px; padding: 8px 12px; margin-top: 10px; }
+.hintcard .hc-t { font-weight: 600; font-size: 12.5px; margin-bottom: 4px; }
+.hintcard p { margin: 0 0 6px; }
+.hintcard pre { background: #fffdf7; padding: 6px 8px; border-radius: 3px; max-height: 320px; overflow: auto; }
+.debrief { margin-top: 14px; border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; }
+.debrief summary { cursor: pointer; font-weight: 600; }
+.debrief pre { margin-top: 8px; max-height: 360px; overflow: auto; }
+.crumb { color: var(--muted); font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumb b { color: var(--ink); }
+.v-passed { border-color: #8fd0a3; } .v-passed .head { background: #def3e4; color: #1c6b34; }

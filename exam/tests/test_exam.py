@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import tests._path  # noqa: F401
+import levels
 import pool
 from server import Exam
 from store import Results, SessionFile
@@ -17,14 +18,30 @@ class FakeCluster:
         self.on_validate = None
         self.run_rc = 0
         self.calls = []
+        self.deploy_objects = []      # cluster_objects passed to each deploy
+        self.deletes = []             # (namespace, cluster_objects) passed to delete_task_objects
+        self.on_deploy = None
+        self.on_run = None
+        self.on_delete = None
 
     def run(self, args, **kw):
         self.calls.append(args)
+        if self.on_run:
+            self.on_run(args)
         return SimpleNamespace(returncode=self.run_rc, stdout="", stderr="boom" if self.run_rc else "")
 
-    def deploy(self, level, ns, renames, cluster_objects=(), node_labels=()):
-        self.deploys.append(ns)
+    def deploy(self, rel, namespace, renames=None, cluster_objects=()):      # same signature as levels.deploy
+        self.deploys.append(namespace)
+        self.deploy_objects.append(list(cluster_objects))
+        if self.on_deploy:
+            self.on_deploy()
         return True, ""
+
+    def delete_task_objects(self, namespace, cluster_objects=()):
+        levels._check_deletable(namespace, list(cluster_objects))          # the real prefix rules apply
+        self.deletes.append((namespace, list(cluster_objects)))
+        if self.on_delete:
+            self.on_delete()
 
     def validate(self, level, ns, renames, timeout=120):
         if self.on_validate:

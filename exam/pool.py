@@ -6,6 +6,7 @@ Each task:
   domain        CKA curriculum domain (selection.DOMAIN_WEIGHTS)
   text          the task wording; {ns} is the task namespace, plus any rename below by its new name
   renames       old -> new names (cluster-scoped objects, a second namespace) rewritten in the level
+  node_reset    True when the level's setup changes node state (labels): Drill resets it before deploying
   cluster_objects  kubectl "kind/name" objects outside the namespace that the task may leave behind
 
 The wording states every condition the level's validate.sh checks and none it does not.
@@ -14,6 +15,7 @@ A missing or corrupt status file is an error, not "admit everything".
 """
 import json
 import os
+import re
 from pathlib import Path
 
 from selection import DOMAIN_WEIGHTS
@@ -24,11 +26,12 @@ W1, W2, W3, W4, W5, W6 = ("world-1-basics", "world-2-deployments", "world-3-netw
                           "world-4-storage", "world-5-security", "world-6-cluster-architecture")
 
 
-def T(id, level, domain, text, renames=None, cluster_objects=(), solution_extra=()):
+def T(id, level, domain, text, renames=None, cluster_objects=(), solution_extra=(), node_reset=False):
     # solution_extra: kubectl argument lists the e2e proof runs before the level's solution.yaml
     return {"id": id, "level": level, "domain": domain, "text": text.strip(),
             "renames": renames or {}, "cluster_objects": list(cluster_objects),
-            "solution_extra": [list(c) for c in solution_extra]}
+            "solution_extra": [list(c) for c in solution_extra],
+            "node_reset": node_reset}
 
 
 ALL_TASKS = [
@@ -159,7 +162,7 @@ Fix it so that the quota still exists, the Deployment's container has CPU and me
 In namespace {ns}, Pod `gpu-workload` stays Pending. The cluster's node carries the label `accelerator=gpu`.
 
 Fix it so that the Pod is Running and still has a `nodeAffinity` rule.
-"""),
+""", node_reset=True),
     T("t47", f"{W5}/level-47-poddisruptionbudget", WL, """
 In namespace {ns}, Deployment `web-app` has 2 replicas and PodDisruptionBudget `web-pdb` can never be satisfied.
 
@@ -283,8 +286,29 @@ BY_ID_ALL = {t["id"]: t for t in ALL_TASKS}
 assert len(BY_ID_ALL) == len(ALL_TASKS), "duplicate task id"
 
 
-def namespace(task_id):
-    return "exam-" + task_id
+def namespace(task_id, kind="exam"):
+    """Task namespace: exam-<id> for the mock exam, drill-<id> for Drill mode."""
+    return f"{kind}-{task_id}"
+
+
+def _retag(name, task_id, kind):
+    """Rename an exam-prefixed object to the prefix of `kind`: exam-t31-app-storage -> drill-t31-app-storage."""
+    old = f"exam-{task_id}-"
+    return f"{kind}-{task_id}-" + name[len(old):] if name.startswith(old) else name
+
+
+def renames_for(task, kind="exam"):
+    """The task's old->new renames, with the new names under the `kind` prefix (drill and exam objects never share names)."""
+    return {old: _retag(new, task["id"], kind) for old, new in task.get("renames", {}).items()}
+
+
+def cluster_objects_for(task, kind="exam"):
+    """The task's cluster-scoped objects ("pv/exam-t31-x") under the `kind` prefix."""
+    out = []
+    for obj in task.get("cluster_objects", ()):
+        k, _, name = obj.partition("/")
+        out.append(f"{k}/{_retag(name, task['id'], kind)}")
+    return out
 
 
 STATUS_FILE = HERE / "e2e-status.json"
@@ -319,7 +343,35 @@ POOL = _pool()
 BY_ID = {t["id"]: t for t in POOL}
 
 
-def render_text(task, host):
-    ns = namespace(task["id"])
+def render_text(task, host, kind="exam"):
+    ns = namespace(task["id"], kind)
     body = task["text"].replace("{ns}", ns)
+    if kind != "exam":
+        body = body.replace(f"exam-{task['id']}-", f"{kind}-{task['id']}-")
     return {"host": host, "ssh": f"ssh {host}", "body": body, "domain": task["domain"]}
+
+
+def drill_title(task, kind="drill"):
+    """Short title for the Drill picker: the first sentence of the exam text, namespace phrase stripped.
+
+    Built from the exam text only. mission.yaml's name/description/concepts name the cause and are never used."""
+    para = task["text"].split("\n\n", 1)[0]
+    end, tick = len(para), False
+    for i, c in enumerate(para):          # first '.' outside a `code span` that ends a sentence
+        if c == "`":
+            tick = not tick
+        elif c == "." and not tick and (i + 1 == len(para) or para[i + 1].isspace()):
+            end = i + 1
+            break
+    s = " ".join(para[:end].split())
+    s = re.sub(r"^In namespace \{ns\},? ", "", s)
+    s = re.sub(r"^Namespace \{ns\} ", "The namespace ", s)
+    s = re.sub(r" in namespace \{ns\}", "", s)
+    s = s.replace("{ns}", namespace(task["id"], kind)).replace(f"exam-{task['id']}-", f"{kind}-{task['id']}-")
+    return s[:1].upper() + s[1:]
+
+
+def solution_extra_text(task, kind="exam"):
+    """Manual steps the level's solution.yaml cannot express (e.g. delete the old ReplicaSet), as kubectl lines."""
+    ns = namespace(task["id"], kind)
+    return ["kubectl " + " ".join(a.replace("{ns}", ns) for a in cmd) for cmd in task.get("solution_extra", ())]

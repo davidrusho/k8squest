@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Live end-to-end proof for pool tasks: broken state must FAIL its validator, the level's
-solution must make it PASS. Usage: e2e.py [--poll SECONDS] [task-id ...]   (default: whole pool)
+solution must make it PASS. Usage: e2e.py [--poll SECONDS] [--kind exam|drill] [--tasks t22,t30 | task-id ...]   (default: whole pool)
 Exploration mode: e2e.py --level <world/level-dir> [--ns exam-tXX]  (no pool entry needed)"""
 import argparse
 import os
@@ -56,25 +56,31 @@ def main():
     levels.install_signal_cleanup()
     ap = argparse.ArgumentParser()
     ap.add_argument("tasks", nargs="*")
+    ap.add_argument("--tasks", dest="task_list", default="", help="comma separated task ids, e.g. t22,t30,t45")
+    ap.add_argument("--kind", choices=("exam", "drill"), default="exam",
+                    help="namespace / object prefix to prove under; drill never writes e2e-status.json")
     ap.add_argument("--level")
     ap.add_argument("--ns")
     ap.add_argument("--poll", type=int, default=90)
     ap.add_argument("--write-status", action="store_true", help="record verdicts in e2e-status.json (drops failing tasks from the pool)")
     ap.add_argument("--keep", action="store_true", help="do not clean up afterwards")
     a = ap.parse_args()
+    if a.kind == "drill" and a.write_status:
+        ap.error("--write-status records the pool and is only valid with --kind exam")
+    wanted = set(a.tasks) | {x.strip() for x in a.task_list.split(",") if x.strip()}
     jobs = []
     if a.level:
         name = a.level.rstrip("/").split("/")[-1]
         m = re.search(r"level-(\d+)", name)
-        ns = a.ns or f"exam-t{int(m.group(1)):02d}"
-        jobs.append((a.level, ns, EXPLORE_RENAMES.get(name, {}), (), ()))
+        ns = a.ns or f"{a.kind}-t{int(m.group(1)):02d}"
+        jobs.append((a.level, ns, {o: n.replace("exam-", a.kind + "-", 1) for o, n in EXPLORE_RENAMES.get(name, {}).items()}, (), ()))
     else:
         import pool
         for t in pool.ALL_TASKS:
-            if a.tasks and t["id"] not in a.tasks:
+            if wanted and t["id"] not in wanted:
                 continue
-            jobs.append((t["level"], pool.namespace(t["id"]), t.get("renames", {}),
-                         t.get("cluster_objects", ()), t.get("solution_extra", ())))
+            jobs.append((t["level"], pool.namespace(t["id"], a.kind), pool.renames_for(t, a.kind),
+                         pool.cluster_objects_for(t, a.kind), t.get("solution_extra", ())))
     bad = 0
     for rel, ns, ren, co, ex in jobs:
         r = prove(rel, ns, ren, co, poll=a.poll, extra=ex)
@@ -91,7 +97,7 @@ def main():
                 st = json.loads(sp.read_text())
             except (OSError, ValueError):
                 st = {}
-            tid = ns.replace("exam-", "")
+            tid = ns.replace("exam-", "", 1)
             st[tid] = {"verdict": r["verdict"], "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                        "detail": "" if r["verdict"] == "OK" else str({k: r[k] for k in ("deploy", "pre", "solution", "post") if k in r})[:600]}
             sp.write_text(json.dumps(st, indent=2, sort_keys=True))

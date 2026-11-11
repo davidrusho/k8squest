@@ -9,6 +9,12 @@ Serves the UI in ui/ and a JSON API (all POST bodies are JSON):
   POST /api/task/check     {id}      run the validator, record the attempt
   POST /api/task/flag      {id, flagged}
   POST /api/session/end
+  GET  /api/drill/state              Drill mode: every pool task with its drill status, plus exam_live
+  POST /api/drill/open     {id}      deploys drill-<id> if needed, returns the task text and what is revealed
+  POST /api/drill/check    {id}      run the validator (not recorded in results.json)
+  POST /api/drill/hint     {id, n}   n 1-3 hints, 4 the solution; in order, else 409
+  POST /api/drill/reset    {id}      fresh broken state; keeps attempts, solved and hints
+  Every drill POST answers 409 while an exam session is live.
 """
 import json
 import mimetypes
@@ -27,8 +33,9 @@ import levels  # noqa: E402
 import pool  # noqa: E402
 import selection  # noqa: E402
 import timing  # noqa: E402
+from drill import Conflict, Drill  # noqa: E402
 from session import STATUS_LABELS, Session  # noqa: E402
-from store import Results, SessionFile  # noqa: E402
+from store import DrillFile, Results, SessionFile  # noqa: E402
 
 HOST, PORT = "127.0.0.1", int(os.environ.get("EXAM_PORT", "6081"))
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -40,7 +47,7 @@ OUTPUT_CAP = 4000
 class Exam:
     """All mutable state behind one lock. Slow cluster work (deploy, validate) runs outside it."""
 
-    def __init__(self, results=None, sessionfile=None, now=time.time, cluster=levels, do_reset=True):
+    def __init__(self, results=None, sessionfile=None, now=time.time, cluster=levels, do_reset=True, drillfile=None):
         self.lock = threading.RLock()
         self.now = now
         self.cluster = cluster
@@ -49,6 +56,14 @@ class Exam:
         self.sessionfile = sessionfile or SessionFile()
         self.session = self._load_session()
         self.busy = set()
+        self.drain_timeout = 120    # seconds a session start waits for in-flight drill operations
+        self.starting = False       # a session start is clearing namespaces: Drill stays locked meanwhile
+        self.drill = Drill(drillfile or DrillFile(self.sessionfile.path.parent / "drill.json"), self.results,
+                           cluster, self.exam_live, now=now, lock=self.lock)
+
+    def exam_live(self):
+        with self.lock:
+            return self.starting or bool(self.session and not self.session.ended)
 
     # ---- helpers
     def _load_session(self):
@@ -106,19 +121,32 @@ class Exam:
             raise ValueError("mode must be weighted or missed")
         warnings = []
         with self.lock:
-            if self.session and not self.session.ended:
-                self.session.end(self.now())
-            tasks = selection.select_session(pool.POOL, self.results.counted_ids(), mode)
-            sess = Session.create(tasks, mode, self.now())
-        if self.do_reset:
-            r = self.cluster.run(HOSTS_RESET, timeout=60)
-            if r.returncode:
-                warnings.append("cka-hosts-reset failed: " + (r.stderr or r.stdout).strip()[-200:])
-        warnings += self._remove_exam_namespaces()
-        warnings += levels.reset_node_state(self.cluster.run)
-        with self.lock:
-            self.session = sess
-            self._save()
+            self.starting = True            # Drill is locked to new requests from here on
+        try:
+            if not self.drill.wait_idle(self.drain_timeout):
+                # a drill deploy still running would delete exam objects after the exam is live: refuse the start
+                raise Conflict("A drill task is still being prepared. Try again in a minute.")
+            with self.lock:
+                if self.session and not self.session.ended:
+                    self.session.end(self.now())
+                tasks = selection.select_session(pool.POOL, self.results.counted_ids(), mode)
+                sess = Session.create(tasks, mode, self.now())
+            if self.do_reset:
+                r = self.cluster.run(HOSTS_RESET, timeout=60)
+                if r.returncode:
+                    warnings.append("cka-hosts-reset failed: " + (r.stderr or r.stdout).strip()[-200:])
+            warnings += self._remove_exam_namespaces()
+            warnings += levels.reset_node_state(self.cluster.run)
+            with self.lock:
+                self.session = sess
+                self._save()
+                try:
+                    self.drill.clear_deployed()      # the sweep above removed the drill namespaces too
+                except Exception as e:
+                    warnings.append("could not update drill.json: %s" % type(e).__name__)
+        finally:
+            with self.lock:
+                self.starting = False
         return {"warnings": warnings}
 
     def _remove_exam_namespaces(self):
@@ -126,13 +154,13 @@ class Exam:
         r = self.cluster.run(["kubectl", "get", "ns", "-o", "name"], timeout=30)
         if r.returncode:
             warn.append("could not list namespaces: " + (r.stderr or r.stdout).strip()[-200:])
-        names = [n.split("/", 1)[1] for n in r.stdout.split() if n.startswith("namespace/exam-")]
+        names = [n.split("/", 1)[1] for n in r.stdout.split() if n.startswith(("namespace/exam-", "namespace/drill-"))]
         for ns in names:
             r = self.cluster.run(["kubectl", "delete", "namespace", ns, "--wait=false", "--ignore-not-found"], timeout=60)
             if r.returncode:
                 warn.append(f"could not delete namespace {ns}: " + (r.stderr or r.stdout).strip()[-200:])
         for t in pool.POOL:
-            for obj in t.get("cluster_objects", ()):
+            for obj in pool.cluster_objects_for(t, "exam") + pool.cluster_objects_for(t, "drill"):
                 r = self.cluster.run(["kubectl", "delete", obj, "--ignore-not-found", "--wait=false"], timeout=60)
                 if r.returncode:
                     warn.append(f"could not delete {obj}: " + (r.stderr or r.stdout).strip()[-200:])
@@ -318,6 +346,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/state":
             return self._send(200, EXAM.state())
+        if path == "/api/drill/state":
+            return self._send(200, EXAM.drill.state())
         rel = "index.html" if path == "/" else path.lstrip("/")
         f = (UI_DIR / rel).resolve()
         if UI_DIR.resolve() not in f.parents or not f.is_file():
@@ -343,6 +373,23 @@ class Handler(BaseHTTPRequestHandler):
             return None, (400, "body must be a JSON object")
         return body, None
 
+    def _drill_post(self, path, body):
+        """Drill POSTs. The exam lock is checked first, so even a malformed request is told 409 while an exam runs."""
+        EXAM.drill.guard()
+        tid = body.get("id")
+        if not isinstance(tid, str):
+            raise ValueError("id must be a string")
+        op = path[len("/api/drill/"):]
+        if op == "open":
+            return EXAM.drill.open(tid)
+        if op == "check":
+            return EXAM.drill.check(tid)
+        if op == "hint":
+            return EXAM.drill.hint(tid, body.get("n"))
+        if op == "reset":
+            return EXAM.drill.reset(tid)
+        raise KeyError(op)
+
     def _post(self):
         if not self._host_ok():
             return self._send(403, {"error": "bad host or origin"})
@@ -359,6 +406,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/session/end":
                 EXAM.end()
                 return self._send(200, EXAM.state())
+            if path.startswith("/api/drill/"):
+                return self._send(200, self._drill_post(path, body))
             tid = body.get("id")
             if not isinstance(tid, str):
                 return self._send(400, {"error": "id must be a string"})
@@ -371,6 +420,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/task/flag":
                 return self._send(200, EXAM.flag(tid, body.get("flagged")))
             return self._send(404, {"error": "not found"})
+        except Conflict as e:
+            return self._send(409, {"error": str(e)})
         except KeyError:
             return self._send(404, {"error": "unknown task"})
         except ValueError as e:

@@ -57,3 +57,21 @@ class SessionFile:
 
     def save(self, obj):
         _save(self.path, obj)
+
+
+class DrillFile:
+    """drill.json: {"tasks": {task_id: {opened, deployed, attempts, solved, solved_at, hints_revealed, last_output}}}.
+    Separate from results.json and session.json; nothing in it feeds exam selection."""
+
+    def __init__(self, path=None):
+        self.path = Path(path) if path else DATA_DIR / "drill.json"
+
+    def load(self):
+        d = _load(self.path, {"tasks": {}})
+        if not isinstance(d, dict) or not isinstance(d.get("tasks"), dict):
+            return {"tasks": {}}
+        d["tasks"] = {k: v for k, v in d["tasks"].items() if isinstance(v, dict)}
+        return d
+
+    def save(self, obj):
+        _save(self.path, obj)

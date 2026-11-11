@@ -15,6 +15,14 @@
   let snap = null;         // timer snapshot {remaining, at, running}
   let busy = false;        // a deploy or check is in flight
   let desktopLoaded = false;
+  let mode = "exam";       // "drill" | "exam"; forced to "exam" while an exam session is live
+  try { if (localStorage.getItem("cka-mode") === "drill") mode = "drill"; } catch (e) { /* storage unavailable */ }
+  let D = null;            // last /api/drill/state
+  let dcur = null;         // drill task shown, null = picker
+  let dpay = {};           // drill task id -> last payload
+  let dstart = {};         // drill task id -> performance.now() when it was opened (client-side only)
+  let dfilter = "all";
+  let dbusy = false;
 
   // ------------------------------------------------------------------ helpers
   function el(tag, attrs, ...kids) {
@@ -179,6 +187,9 @@
   }
 
   function render() {
+    syncMode();
+    renderModes();
+    if (mode === "drill") { renderDrill(); return; }
     renderChrome();
     const s = sess();
     if (!s) { renderStart(); paintTimer(); return; }
@@ -280,6 +291,226 @@
     });
   }
 
+
+  // ------------------------------------------------------------------ drill mode
+  const DBADGE = { not_tried: "b-not_opened", opened: "b-opened", solved: "b-passed_in_time", failed_in_exam: "b-failed" };
+
+  function setMode(m) {
+    mode = m;
+    try { localStorage.setItem("cka-mode", m); } catch (e) { /* storage unavailable */ }
+  }
+  // an exam session that is live forces Mock exam mode (the server refuses drill requests then as well)
+  function syncMode() {
+    if (live() && mode !== "exam") setMode("exam");
+    applyChrome();
+  }
+  // the single place that decides which mode's chrome is visible: `hidden` on every exam-only / drill-only element
+  function applyChrome() {
+    const drill = mode === "drill";
+    document.body.classList.toggle("drill-mode", drill);
+    for (const id of ["timerbar", "taskbar", "actions", "btn-end", "readme-exam"]) $(id).hidden = drill;
+    for (const id of ["drillbar", "readme-drill"]) $(id).hidden = !drill;
+    for (const id of ["drill-taskbar", "drill-actions"]) $(id).hidden = !drill || !dcur;
+  }
+  function renderModes() {
+    const locked = live();
+    const bd = $("mode-drill"), be = $("mode-exam");
+    bd.classList.toggle("on", mode === "drill");
+    be.classList.toggle("on", mode === "exam");
+    bd.disabled = locked;
+    bd.textContent = locked ? "\u{1F512} Drill" : "Drill";
+    const tip = locked ? "End the exam to switch to Drill" : "";
+    bd.title = tip;
+    $("modes").title = tip;
+  }
+  async function switchMode(m) {
+    if (m === mode) return;
+    if (m === "drill") {
+      if (live()) return;
+      try { await refreshDrill(); } catch (e) { /* the picker shows the error */ }
+      setMode("drill");
+      dcur = null;
+      render();
+      if (!D) errorBox("Cannot load Drill state.");
+    } else {
+      setMode("exam");
+      render();
+      if (live() && current && !payload[current]) gotoTask(current);
+    }
+  }
+
+  async function refreshDrill() {
+    D = await api("/api/drill/state");
+    if (D.exam_live) { await refresh(); }
+    return D;
+  }
+  const dTask = (id) => (D ? D.tasks.find((t) => t.id === id) : null);
+
+  function renderDrill() {
+    const side = $("drill-side");
+    if (D) {
+      const solved = D.tasks.filter((t) => t.solved).length;
+      side.textContent = solved + " of " + D.tasks.length + " solved";
+    } else side.textContent = "";
+    applyChrome();
+    if (!D) { $("screen").replaceChildren(el("div", { class: "busy" }, "Loading...")); return; }
+    if (dcur && dpay[dcur]) renderDrillTask(dcur); else renderPicker();
+  }
+
+  function renderPicker() {
+    const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
+    const chips = [["all", "All"], ["unsolved", "Not solved"], ["failed", "Failed in an exam"]].map(([k, label]) =>
+      el("button", { class: dfilter === k ? "on" : "", text: label, onclick: () => { dfilter = k; renderDrill(); } }));
+    const kids = [el("div", { class: "filter" }, ...chips)];
+    const keep = (t) => (dfilter === "unsolved" ? !t.solved : dfilter === "failed" ? t.failed_in_exam : true);
+    let shown = 0;
+    for (const dom of D.domains) {
+      const all = D.tasks.filter((t) => t.domain === dom.name);
+      if (!all.length) continue;
+      const rows = all.filter(keep);
+      shown += rows.length;
+      if (!rows.length) continue;
+      const solved = all.filter((t) => t.solved).length;
+      kids.push(el("div", { class: "dom-h" }, el("span", { text: dom.name }),
+        el("small", { text: solved + " of " + all.length + " solved · " + pct(solved, all.length) + "%" })));
+      for (const t of rows) {
+        kids.push(el("div", { class: "trow", role: "button", tabindex: "0", onclick: () => openDrill(t.id) },
+          el("span", { class: "id", text: t.id }),
+          el("span", { class: "nm" }, rich(t.title)),
+          el("span", { class: "badge " + DBADGE[t.status], text: t.status_label })));
+      }
+    }
+    if (!shown) kids.push(el("p", { class: "attempts", text: "No tasks match this filter." }));
+    $("screen").replaceChildren(...kids);
+  }
+
+  function nextInDomain(id) {
+    const t = dTask(id);
+    if (!t) return null;
+    const same = D.tasks.filter((x) => x.domain === t.domain);
+    const i = same.findIndex((x) => x.id === id);
+    return i >= 0 && i < same.length - 1 ? same[i + 1].id : null;
+  }
+
+  function paragraphs(text) {
+    return text.split(/\n\s*\n/).map((t) => el("p", {}, rich(t.trim())));
+  }
+
+  function renderDrillTask(id) {
+    const p = dpay[id];
+    const info = el("div", { class: "infobox" }, "Solve this task on host ", el("b", { text: p.text.host }), ": ", el("code", { text: p.text.ssh }));
+    const check = el("button", { class: "check", id: "btn-check", text: dbusy ? "Working..." : "Check", onclick: () => drillCheck(id) });
+    check.disabled = dbusy;
+    const attempts = p.attempts ? p.attempts + " check" + (p.attempts === 1 ? "" : "s") : "";
+    const kids = [info, el("div", { class: "task-text" }, ...paragraphs(p.text.body)),
+      el("div", { class: "checkrow" }, check, el("span", { class: "attempts", id: "attempts", text: attempts }))];
+    if (p.last_passed !== null && p.last_passed !== undefined) {
+      const out = p.output_withheld ? "Press Hint 3 to also see the checker's output."
+        : (p.last_output && p.last_output.trim() ? p.last_output.trim() : "(the validator printed nothing)");
+      kids.push(el("div", { class: "verdict v-" + (p.last_passed ? "passed" : "failed"), id: "verdict" },
+        el("div", { class: "head", text: p.last_passed ? "Passed." : "Not passed yet." }),
+        el("pre", { id: "verdict-out", text: out })));
+    }
+    // hint ladder: each button is enabled only after the previous one was revealed
+    const labels = ["Hint 1", "Hint 2", "Hint 3", "Show solution"];
+    const btns = labels.map((label, i) => {
+      const n = i + 1;
+      const used = p.hints_revealed >= n;
+      const b = el("button", { class: (used ? "used " : "") + (n === 4 ? "danger-ish" : ""), id: "hint-" + n, text: label + (used ? " ✓" : "") });
+      if (used) b.setAttribute("aria-disabled", "true");
+      else { b.disabled = dbusy || n !== p.hints_revealed + 1; b.onclick = () => drillHint(id, n); }
+      return b;
+    });
+    const hints = el("div", { class: "hints" }, el("h4", { text: "Stuck?" }), el("div", { class: "hintbtns" }, ...btns));
+    p.hints.forEach((h, i) => hints.append(el("div", { class: "hintcard", id: "hintcard-" + (i + 1) }, el("div", { class: "hc-t", text: "Hint " + (i + 1) }), ...paragraphs(h))));
+    if (p.solution) hints.append(el("div", { class: "hintcard", id: "solution" }, el("div", { class: "hc-t", text: "Solution" }), el("pre", { text: p.solution })));
+    kids.push(hints);
+    if (p.debrief) {
+      const det = el("details", { class: "debrief", id: "debrief" }, el("summary", { text: "Debrief" }), el("pre", { text: p.debrief }));
+      if (dopen[id]) det.open = true;
+      det.addEventListener("toggle", () => { dopen[id] = det.open; });
+      kids.push(det);
+    }
+    $("screen").replaceChildren(...kids);
+    $("drill-crumb").replaceChildren(document.createTextNode(p.domain + " · "), el("b", { text: id }));
+    const nx = nextInDomain(id);
+    $("drill-next-arrow").disabled = dbusy || !nx;
+    $("drill-back").disabled = dbusy;
+    $("drill-reset").disabled = dbusy;
+    $("drill-next").disabled = dbusy;
+    paintDrillTime();
+  }
+  let dopen = {};          // drill task id -> debrief section expanded
+
+  function paintDrillTime() {
+    const side = $("drill-side");
+    if (!D || !dcur || dstart[dcur] == null) return;
+    side.textContent = fmt((performance.now() - dstart[dcur]) / 1000) + " on this task";
+  }
+  setInterval(() => { if (mode === "drill" && dcur) paintDrillTime(); }, 1000);
+
+  async function drillCall(path, body, busyMsg) {
+    dbusy = true;
+    if (busyMsg) { $("screen").replaceChildren(el("div", { class: "busy" }, el("span", { class: "spin" }), busyMsg)); }
+    else if (dcur) renderDrillTask(dcur);
+    try {
+      return await api(path, body);
+    } finally {
+      dbusy = false;
+    }
+  }
+  async function drillFail(e) {
+    // a 409 means an exam started somewhere else: resync, which locks Drill and shows the exam
+    await refresh().catch(() => {});
+    render();
+    errorBox(String(e.message || e));
+    if (live() && !payload[current || ""]) { const s = sess(); const id = current || (s.tasks.length ? s.tasks[0].id : null); if (id) gotoTask(id); }
+  }
+
+  async function openDrill(id) {
+    if (dbusy) return;
+    dcur = id; applyChrome();
+    try {
+      const p = await drillCall("/api/drill/open", { id }, dpay[id] ? null : "Preparing the environment for this task. This can take up to a minute...");
+      dpay[id] = p;
+      if (dstart[id] == null) dstart[id] = performance.now();
+      await refreshDrill();
+      render();
+    } catch (e) { dcur = null; await drillFail(e); }
+  }
+  async function drillCheck(id) {
+    try {
+      const r = await drillCall("/api/drill/check", { id });
+      dpay[id] = r;
+      await refreshDrill();
+      render();
+    } catch (e) { await drillFail(e); }
+  }
+  async function drillHint(id, n) {
+    try {
+      dpay[id] = await drillCall("/api/drill/hint", { id, n });
+      await refreshDrill();
+      render();
+    } catch (e) { await drillFail(e); }
+  }
+  function drillReset() {
+    const id = dcur;
+    if (!id || dbusy) return;
+    modal("Reset task", "Delete the namespace and rebuild the broken state? Your changes to this task's objects are lost. Attempts, solved and revealed hints are kept.", "Reset", async () => {
+      try {
+        dpay[id] = await drillCall("/api/drill/reset", { id }, "Rebuilding the broken state...");
+        dstart[id] = performance.now();
+        await refreshDrill();
+        render();
+      } catch (e) { await drillFail(e); }
+    });
+  }
+  function drillBack() { dcur = null; render(); }
+  function drillNext() {
+    const nx = dcur ? nextInDomain(dcur) : null;
+    if (nx) openDrill(nx); else drillBack();
+  }
+
   // ------------------------------------------------------------------ tabs, dividers, menus
   function showTab(name) {
     for (const t of ["readme", "desktop"]) {
@@ -313,6 +544,12 @@
     $("tab-desktop").onclick = () => showTab("desktop");
     $("btn-help").onclick = () => showTab("readme");
     $("btn-end").onclick = endExam;
+    $("mode-drill").onclick = () => switchMode("drill");
+    $("mode-exam").onclick = () => switchMode("exam");
+    $("drill-back").onclick = drillBack;
+    $("drill-next").onclick = drillNext;
+    $("drill-next-arrow").onclick = drillNext;
+    $("drill-reset").onclick = drillReset;
     $("btn-flag").onclick = toggleFlag;
     $("btn-satisfied").onclick = satisfiedNext;
     $("btn-next-arrow").onclick = () => { const t = sess().tasks; const i = t.findIndex((x) => x.id === current); if (i < t.length - 1) gotoTask(t[i + 1].id); };
@@ -360,7 +597,10 @@
     }, BEAT_MS);
 
     refresh().then(async () => {
+      syncMode();
+      if (mode === "drill") { try { await refreshDrill(); } catch (e) { /* picker shows loading error */ } }
       render();
+      if (mode === "drill") return;
       if (live() && current) { await gotoTask(current); }
       else if (live() && sess().tasks.length) { await gotoTask(sess().tasks[0].id); }
     }).catch((e) => { $("screen").replaceChildren(el("div", { class: "err", text: "Cannot reach the exam server: " + e.message })); });
