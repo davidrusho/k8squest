@@ -416,6 +416,7 @@
     const attempts = p.attempts ? p.attempts + " check" + (p.attempts === 1 ? "" : "s") : "";
     const kids = [info, el("div", { class: "task-text" }, ...paragraphs(p.text.body)),
       el("div", { class: "checkrow" }, check, el("span", { class: "attempts", id: "attempts", text: attempts }))];
+    if (p.notice) kids.splice(1, 0, el("div", { class: "infobox", id: "drill-notice", text: p.notice }));
     if (p.last_passed !== null && p.last_passed !== undefined) {
       const out = p.output_withheld ? "Press Hint 3 to also see the checker's output."
         : (p.last_output && p.last_output.trim() ? p.last_output.trim() : "(the validator printed nothing)");

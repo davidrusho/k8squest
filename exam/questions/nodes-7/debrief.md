@@ -1,0 +1,1 @@
+`k cordon <node>` marks the node unschedulable without touching running Pods; STATUS shows Ready,SchedulingDisabled. Make it schedulable again with `k uncordon <node>` (that end state equals the start, so it is not graded).

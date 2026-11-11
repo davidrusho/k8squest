@@ -405,15 +405,324 @@ class DrillCase(unittest.TestCase):
         self.assertEqual(self.cluster.deletes[-1], ("exam-t31", ["pv/exam-t31-app-storage"]))
         self.assertTrue(all(ns == "exam-t31" for ns, _ in self.cluster.deletes))
 
-    def test_only_t45_resets_node_state(self):
+    def test_node_state_is_reset_before_every_deploy(self):
         node_reset = lambda: [c for c in self.cluster.calls if c[:3] == ["kubectl", "get", "nodes"]]
         self.drill.open("t03")
-        self.assertEqual(node_reset(), [])
-        self.drill.open("t45")
         self.assertEqual(len(node_reset()), 1)
-        self.drill.reset("t45")
+        self.drill.open("t45")
         self.assertEqual(len(node_reset()), 2)
-        self.assertEqual([t["id"] for t in pool.POOL if t.get("node_reset")], ["t45"])
+        self.drill.reset("t45")
+        self.assertEqual(len(node_reset()), 3)
+        self.drill.reset("t03")
+        self.assertEqual(len(node_reset()), 4)
+        self.assertEqual([t["id"] for t in pool.POOL if t.get("node_reset")], ["t45"])    # the field is informational now
+
+    def test_a_node_reset_failure_does_not_stop_the_deploy(self):
+        from unittest import mock
+        with mock.patch.object(levels, "reset_node_state", return_value=["could not uncordon node/n1: nope"]) as rs:
+            p = self.drill.open("t03")
+        rs.assert_called_once()
+        self.assertEqual(p["namespace"], "drill-t03")
+        self.assertIn("drill-t03", self.cluster.deploys)
+
+    # ---- node epoch: a node task whose node setup was wiped by another task's deploy must not be gradable
+    def _with_pool(self, *ids):
+        from unittest import mock
+        dp = [pool.BY_ID_QUESTION[i] for i in ids]
+        stack = [mock.patch.object(pool, "DRILL_POOL", dp), mock.patch.object(pool, "DRILL_BY_ID", {t["id"]: t for t in dp})]
+        for m in stack:
+            m.start()
+            self.addCleanup(m.stop)
+
+    def test_node_task_is_refused_after_another_task_reset_the_node(self):
+        self._with_pool("c94", "c18")
+        called = []
+        self.cluster.on_validate = lambda: called.append(1)
+        self.drill.open("c94")
+        self.drill.open("c18")                                # its deploy resets the node: c94's setup is gone
+        with self.assertRaises(Conflict) as cm:
+            self.drill.check("c94")
+        self.assertIn("The node no longer holds this task's setup. Press Reset task, then redo it.", str(cm.exception))
+        self.assertEqual(called, [])                          # the validator was not run
+        self.assertEqual(self.drill._rec("c94")["attempts"], 0)    # and the refusal is not an attempt
+        self.drill.reset("c94")
+        self.drill.check("c94")
+        self.assertEqual(called, [1])                         # after Reset the check runs
+        self.assertEqual(self.drill._rec("c94")["attempts"], 1)
+
+    def test_a_non_node_task_is_never_refused_but_is_graded_on_a_cleared_node(self):
+        self._with_pool("c90", "c18")
+        called = []
+        self.cluster.on_validate = lambda: called.append(self.drill.data["node_owner"])
+        self.drill.open("c18")
+        self.drill.open("c90")                                # a second tab: the node now holds c90's setup
+        self.assertEqual(self.drill.data["node_owner"], "c90")
+        before = self.drill.data["node_epoch"]
+        r = self.drill.check("c18")
+        self.assertEqual(called, [None])                      # not refused; the node was clean when the validator ran
+        self.assertEqual(self.drill.data["node_epoch"], before + 1)
+        self.assertIn("reset before this check", self.drill._rec("c18")["notice"])
+        self.assertEqual(r["attempts"], 1)
+        self.assertEqual(self.drill.busy, set())
+        self.drill.check("c18")                               # owner is None: no further reset
+        self.assertEqual(self.drill.data["node_epoch"], before + 1)
+        self.assertFalse(pool.BY_ID_QUESTION["c18"]["node_dependent"])
+        self.assertEqual(sorted(t["id"] for t in pool.ALL_TASKS + pool.QUESTION_TASKS if t["node_dependent"]),
+                         ["c74", "c90", "c91", "c92", "c93", "c94", "c95", "c96", "c97", "t45"])
+
+    def test_node_reset_warnings_reach_the_payload_and_a_failed_deploy_message(self):
+        from unittest import mock
+        self._with_pool("c18")
+        with mock.patch.object(levels, "reset_node_state", return_value=["could not uncordon node/n1: nope"]):
+            p = self.drill.open("c18")
+        self.assertIn("Node reset warning", p["notice"])
+        self.assertIn("could not uncordon node/n1", p["notice"])
+        self.cluster.deploy = lambda *a, **k: (False, "kubectl exploded")
+        with mock.patch.object(levels, "reset_node_state", return_value=["w1"]):
+            with self.assertRaises(RuntimeError) as cm:
+                self.drill.reset("c18")
+        self.assertIn("w1", str(cm.exception))
+        self.assertIn("kubectl exploded", str(cm.exception))
+
+    def test_a_node_task_resets_the_node_again_after_a_pass_or_the_solution(self):
+        from unittest import mock
+        self._with_pool("c94", "c18")
+        with mock.patch.object(levels, "reset_node_state", return_value=[]) as rs:
+            self.drill.open("c94")
+            n = rs.call_count
+            self.cluster.pass_next = True
+            res = self.drill.check("c94")
+            self.assertEqual(rs.call_count, n + 1)                       # reset after the pass
+            self.assertEqual(res["verdict"], "passed")
+            self.assertNotIn("Node changes from this task were undone.", res["output"])      # said once, in the notice
+            self.assertEqual(res["notice"], "Node changes from this task were undone.")
+            with self.assertRaises(Conflict):                           # its own node setup is gone now
+                self.drill.check("c94")
+            self.drill.open("c18")
+            n = rs.call_count
+            self.drill.check("c18")
+            self.assertEqual(rs.call_count, n)                           # a non-node task is not reset after a pass
+            self.drill.reset("c94")
+            n = rs.call_count
+            for i in (1, 2, 3):
+                self.drill.hint("c94", i)
+            self.assertEqual(rs.call_count, n)
+            p = self.drill.hint("c94", 4)
+            self.assertEqual(rs.call_count, n + 1)                       # reset when the solution is shown
+            self.assertIn("Node changes from this task were undone.", p["notice"])
+
+    # ---- one owner at a time
+    def _node_cluster_log(self):
+        order = []
+        self.cluster.on_run = lambda a: order.append("reset") if a[:3] == ["kubectl", "get", "nodes"] else None
+        self.cluster.on_deploy = lambda: order.append("deploy")
+        return order
+
+    def test_deploy_resets_the_node_before_the_tasks_setup_and_records_the_owner(self):
+        self._with_pool("c94", "c18")
+        order = self._node_cluster_log()
+        self.drill.open("c94")
+        self.assertEqual(order, ["reset", "deploy"])
+        self.assertEqual(self.drill.data["node_owner"], "c94")
+        self.assertEqual(self.drill._rec("c94")["epoch"], self.drill.data["node_epoch"])
+        self.drill.open("c18")
+        self.assertIsNone(self.drill.data["node_owner"])
+
+    def test_opening_a_deployed_non_node_task_resets_a_node_owned_by_another_task(self):
+        self._with_pool("c94", "c18")
+        self.drill.open("c18")
+        self.drill.open("c94")
+        self.assertEqual(self.drill.data["node_owner"], "c94")
+        order = self._node_cluster_log()
+        called = []
+        self.cluster.on_validate = lambda: called.append(1)
+        p = self.drill.open("c18")                           # already deployed: no deploy, but the node is cleared
+        self.assertEqual(order, ["reset"])
+        self.assertIsNone(self.drill.data["node_owner"])
+        self.assertEqual(p["namespace"], "drill-c18")
+        self.assertEqual(self.drill.check("c18")["verdict"], "failed")
+        self.assertEqual(called, [1])
+
+    def test_reopening_a_node_task_that_lost_the_node_rebuilds_it(self):
+        self._with_pool("c94", "c18")
+        self.drill.open("c94")
+        self.drill.hint("c94", 1)
+        self.drill.open("c18")
+        self.cluster.deploys.clear()
+        p = self.drill.open("c94")
+        self.assertEqual(self.cluster.deploys, ["drill-c94"])
+        self.assertIn("node setup was rebuilt", p["notice"])
+        self.assertEqual(p["hints_revealed"], 1)                      # kept, as Reset keeps it
+        self.assertEqual(self.drill.data["node_owner"], "c94")
+        self.assertEqual(self.drill.check("c94")["verdict"], "failed")   # runs, not refused
+        self.assertEqual(self.drill._rec("c94")["attempts"], 1)
+        self.assertIn("node setup was rebuilt", self.drill._rec("c94")["notice"])   # a failed check keeps the notice
+        self.cluster.deploys.clear()
+        self.drill.open("c94")
+        self.assertEqual(self.cluster.deploys, [])                    # still owned: no second rebuild
+
+    def test_check_is_refused_when_the_node_belongs_to_another_task(self):
+        self._with_pool("c94", "c95")
+        called = []
+        self.cluster.on_validate = lambda: called.append(1)
+        self.drill.open("c94")
+        self.drill.data["node_owner"] = "c95"            # epoch is current, owner is not
+        with self.assertRaises(Conflict):
+            self.drill.check("c94")
+        self.assertEqual((called, self.drill._rec("c94")["attempts"]), ([], 0))
+        self.assertEqual(self.drill.busy, set())
+
+    def test_two_concurrent_node_deploys_never_leave_a_current_epoch_on_a_non_owner(self):
+        self._with_pool("c94", "c95")
+        real = self.cluster.deploy
+
+        events = []
+
+        def slow(rel, ns, renames=None, cluster_objects=()):
+            events.append("start " + ns)
+            if ns == "drill-c94":
+                time.sleep(0.3)
+            out = real(rel, ns, renames, cluster_objects)
+            events.append("end " + ns)
+            return out
+        self.cluster.deploy = slow
+        a = threading.Thread(target=self.drill.open, args=("c94",))
+        b = threading.Thread(target=self.drill.open, args=("c95",))
+        a.start()
+        time.sleep(0.1)
+        b.start()
+        a.join()
+        b.join()
+        self.assertEqual(events, ["start drill-c94", "end drill-c94", "start drill-c95", "end drill-c95"])   # c95 waited on node_lock
+        d = self.drill.data
+        for tid in ("c94", "c95"):
+            if self.drill._rec(tid)["epoch"] == d["node_epoch"]:
+                self.assertEqual(d["node_owner"], tid)
+
+    def test_post_pass_reset_holds_busy_and_guards_first(self):
+        from unittest import mock
+        self._with_pool("c94")
+        self.drill.open("c94")
+        seen = {}
+
+        def fake_reset(runner=None):
+            seen["busy"] = "c94" in self.drill.busy
+            seen["idle"] = self.drill.wait_idle(0.15)          # must NOT report idle while the reset runs
+            return []
+        self.cluster.pass_next = True
+        with mock.patch.object(levels, "reset_node_state", side_effect=fake_reset):
+            self.drill.check("c94")
+        self.assertEqual(seen, {"busy": True, "idle": False})
+        self.drill.reset("c94")
+        self.cluster.on_validate = lambda: setattr(self.exam, "starting", True)   # an exam goes live during the check
+        self.cluster.pass_next = True
+        with mock.patch.object(levels, "reset_node_state", return_value=[]) as rs:
+            with self.assertRaises(Locked):
+                self.drill.check("c94")
+        rs.assert_not_called()
+        self.exam.starting = False
+
+    def test_show_solution_resets_only_when_this_task_owns_the_node(self):
+        from unittest import mock
+        self._with_pool("c94", "c95")
+        self.drill.open("c94")
+        self.drill.open("c95")                              # c95 owns the node now
+        for i in (1, 2, 3):
+            self.drill.hint("c94", i)
+        with mock.patch.object(levels, "reset_node_state", return_value=[]) as rs:
+            p = self.drill.hint("c94", 4)
+        rs.assert_not_called()
+        self.assertEqual(self.drill.data["node_owner"], "c95")
+        self.assertNotIn("undone", p["notice"] or "")
+        for i in (1, 2, 3):
+            self.drill.hint("c95", i)
+        before = self.drill.data["node_epoch"]
+        self.drill.hint("c95", 4)
+        self.assertEqual((self.drill.data["node_owner"], self.drill.data["node_epoch"]), (None, before + 1))
+        self.assertEqual(self.drill.busy, set())
+
+    def test_node_epoch_and_owner_persist_and_a_legacy_record_is_stale(self):
+        self._with_pool("c94")
+        self.drill.open("c94")
+        again = make(self.tmp.name, self.cluster)
+        self.assertEqual((again.drill.data["node_epoch"], again.drill.data["node_owner"]),
+                         (self.drill.data["node_epoch"], "c94"))
+        saved = json.loads((Path(self.tmp.name) / "drill.json").read_text())
+        self.assertEqual(saved["tasks"]["c94"]["epoch"], saved["node_epoch"])
+        self.assertEqual(saved["node_owner"], "c94")
+        del again.drill.data["tasks"]["c94"]["epoch"]           # written before epochs existed
+        with self.assertRaises(Conflict):
+            again.drill.check("c94")
+        p = again.drill.open("c94")                              # reopening rebuilds it
+        self.assertIn("rebuilt", p["notice"])
+        self.assertEqual(again.drill.check("c94")["verdict"], "failed")
+
+    def test_exam_start_bumps_the_epoch_and_clears_the_owner(self):
+        self._with_pool("c94")
+        self.drill.open("c94")
+        before = self.drill.data["node_epoch"]
+        self.exam.start("weighted")
+        self.assertEqual((self.drill.data["node_epoch"], self.drill.data["node_owner"]), (before + 1, None))
+        persisted = json.loads((Path(self.tmp.name) / "drill.json").read_text())
+        self.assertEqual((persisted["node_epoch"], persisted["node_owner"]), (before + 1, None))
+
+    def test_exam_start_marks_the_node_unknown_while_it_resets(self):
+        seen = []
+        self.cluster.on_run = lambda a: seen.append(self.drill.data["node_owner"]) if a[:3] == ["kubectl", "get", "nodes"] else None
+        self.exam.start("weighted")
+        self.assertEqual(seen, ["?"])
+        self.assertIsNone(self.drill.data["node_owner"])
+
+    def test_a_failed_node_task_setup_leaves_the_node_unknown_and_the_next_task_resets_it(self):
+        self._with_pool("c94", "c18")
+        self.drill.open("c18")
+        real = self.cluster.deploy
+        self.cluster.deploy = lambda *a, **k: (False, "boom")
+        with self.assertRaises(RuntimeError):
+            self.drill.open("c94")
+        self.assertEqual(self.drill.data["node_owner"], "?")
+        self.cluster.deploy = real
+        order = self._node_cluster_log()
+        self.drill.open("c18")                                # already deployed: the dirty node is reset
+        self.assertEqual(order, ["reset"])
+        self.assertIsNone(self.drill.data["node_owner"])
+        self.drill.data["node_owner"] = "?"
+        self.drill.check("c18")                               # and a check on a non-node task resets too
+        self.assertIsNone(self.drill.data["node_owner"])
+        self.drill.open("c94")
+        self.drill.data["node_owner"] = "?"
+        with self.assertRaises(Conflict):                     # a node task is refused while the node is unknown
+            self.drill.check("c94")
+
+    def test_a_crash_between_marking_dirty_and_the_reset_leaves_the_mark_persisted(self):
+        self._with_pool("c94", "c18")
+        self.drill.open("c18")
+        self.drill.open("c94")
+
+        def crash(args):
+            if args[:3] == ["kubectl", "get", "nodes"]:
+                raise RuntimeError("power cut")
+        self.cluster.on_run = crash
+        with self.assertRaises(RuntimeError):
+            self.drill.open("c18")
+        saved = json.loads((Path(self.tmp.name) / "drill.json").read_text())
+        self.assertEqual(saved["node_owner"], "?")
+        self.cluster.on_run = None
+        again = make(self.tmp.name, self.cluster)
+        order = []
+        self.cluster.on_run = lambda a: order.append("reset") if a[:3] == ["kubectl", "get", "nodes"] else None
+        again.drill.open("c18")
+        self.assertEqual(order, ["reset"])
+        self.assertIsNone(again.drill.data["node_owner"])
+
+    def test_a_reset_with_warnings_keeps_the_node_marked_unknown(self):
+        from unittest import mock
+        self._with_pool("c94")
+        self.drill.open("c94")
+        self.cluster.pass_next = True
+        with mock.patch.object(levels, "reset_node_state", return_value=["could not uncordon n1"]):
+            self.drill.check("c94")
+        self.assertEqual(self.drill.data["node_owner"], "?")
 
     # ---- start survives a drill.json problem; DrillFile tolerates junk
     def test_drill_json_failure_does_not_break_exam_start(self):

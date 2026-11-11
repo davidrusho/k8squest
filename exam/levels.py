@@ -207,14 +207,17 @@ def delete_task_objects(namespace, cluster_objects=()):
         run(["kubectl", "delete", obj, "--ignore-not-found", "--wait=true", "--timeout=90s"], timeout=110)
 
 
-# Node state some tasks leave behind (t45's setup labels the node). Removed at session start so a
-# solved state cannot carry into the next session. Taints are deliberately not touched.
-NODE_LABEL_KEYS = ("accelerator", "gpu-type")
+# Node state some tasks leave behind (t45's setup and the node drill tasks label, taint and cordon the node).
+# Removed at session start and before every drill deploy so a solved or abandoned state cannot carry into
+# the next task. Only the keys below are touched: any other label or taint of the node is left alone.
+NODE_LABEL_KEYS = ("accelerator", "gpu-type", "disk")
+NODE_TAINT_KEYS = ("dedicated",)
 
 
 def reset_node_state(runner=None):
-    """Remove the two exam node labels from every node and uncordon every node, kubectl pinned to the
-    context. Returns a list of warning strings, empty when everything worked."""
+    """Remove the exam/drill node labels and taints (NODE_LABEL_KEYS, NODE_TAINT_KEYS) from every node and
+    uncordon every node, kubectl pinned to the context. Returns a list of warning strings, empty when
+    everything worked."""
     runner = runner or run
     warn = []
     r = runner(["kubectl", "get", "nodes", "-o", "name"], timeout=30)
@@ -225,6 +228,11 @@ def reset_node_state(runner=None):
         # removing a label that is not there is fine
         if r.returncode and "not found" not in (r.stderr or ""):
             warn.append(f"could not remove node labels from {node}: " + (r.stderr or r.stdout).strip()[-200:])
+        for key in NODE_TAINT_KEYS:
+            r = runner(["kubectl", "taint", "nodes", node.split("/", 1)[-1], f"{key}-"], timeout=30)
+            # removing a taint that is not there is fine
+            if r.returncode and "not found" not in (r.stderr or ""):
+                warn.append(f"could not remove taint {key} from {node}: " + (r.stderr or r.stdout).strip()[-200:])
         r = runner(["kubectl", "uncordon", node], timeout=30)
         if r.returncode:
             warn.append(f"could not uncordon {node}: " + (r.stderr or r.stdout).strip()[-200:])

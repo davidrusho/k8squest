@@ -1,0 +1,1 @@
+Docs: Assign Pods to Nodes — https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes/

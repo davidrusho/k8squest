@@ -6,7 +6,9 @@ Each task:
   domain        CKA curriculum domain (selection.DOMAIN_WEIGHTS)
   text          the task wording; {ns} is the task namespace, plus any rename below by its new name
   renames       old -> new names (cluster-scoped objects, a second namespace) rewritten in the level
-  node_reset    True when the level's setup changes node state (labels): Drill resets it before deploying
+  node_reset    True when the level's setup changes node state (labels). Informational: Drill now resets node state before every deploy
+  node_dependent  True when the task's setup or grading depends on node labels, taints or cordon: Drill refuses to check it after another
+                task reset the node (node epoch), and resets the node again once it is passed
   cluster_objects  kubectl "kind/name" objects outside the namespace that the task may leave behind
 
 The wording states every condition the level's validate.sh checks and none it does not.
@@ -26,12 +28,12 @@ W1, W2, W3, W4, W5, W6 = ("world-1-basics", "world-2-deployments", "world-3-netw
                           "world-4-storage", "world-5-security", "world-6-cluster-architecture")
 
 
-def T(id, level, domain, text, renames=None, cluster_objects=(), solution_extra=(), node_reset=False):
+def T(id, level, domain, text, renames=None, cluster_objects=(), solution_extra=(), node_reset=False, node_dependent=False):
     # solution_extra: kubectl argument lists the e2e proof runs before the level's solution.yaml
     return {"id": id, "level": level, "domain": domain, "text": text.strip(),
             "renames": renames or {}, "cluster_objects": list(cluster_objects),
             "solution_extra": [list(c) for c in solution_extra],
-            "node_reset": node_reset, "pattern": None}
+            "node_reset": node_reset, "node_dependent": node_dependent, "pattern": None}
 
 
 ALL_TASKS = [
@@ -162,7 +164,7 @@ Fix it so that the quota still exists, the Deployment's container has CPU and me
 In namespace {ns}, Pod `gpu-workload` stays Pending. The cluster's node carries the label `accelerator=gpu`.
 
 Fix it so that the Pod is Running and still has a `nodeAffinity` rule.
-""", node_reset=True),
+""", node_reset=True, node_dependent=True),
     T("t47", f"{W5}/level-47-poddisruptionbudget", WL, """
 In namespace {ns}, Deployment `web-app` has 2 replicas and PodDisruptionBudget `web-pdb` can never be satisfied.
 
@@ -310,10 +312,10 @@ PATTERNS = [
 PATTERN_IDS = {p["id"] for p in PATTERNS}
 
 
-def Q(id, qid, domain, pattern, text, renames=None, cluster_objects=(), solution_extra=(), node_reset=False):
+def Q(id, qid, domain, pattern, text, renames=None, cluster_objects=(), solution_extra=(), node_reset=False, node_dependent=False):
     """A short-kubectl-question task from the drill page. Its directory is exam/questions/<qid>/. Drill-only."""
     assert pattern in PATTERN_IDS, f"{id}: unknown pattern {pattern!r}"
-    t = T(id, f"questions/{qid}", domain, text, renames, cluster_objects, solution_extra, node_reset)
+    t = T(id, f"questions/{qid}", domain, text, renames, cluster_objects, solution_extra, node_reset, node_dependent)
     t.update({"source": "question", "qid": qid, "pattern": pattern})
     return t
 
@@ -541,7 +543,7 @@ In namespace {ns}, write the list of only the Pods that have the label `tier=fro
 """),
     Q("c74", "inspecting-3", TS, "get", """
 In namespace {ns}, write the list of only the Pods whose phase is Running to `/opt/course/{ns}/running.txt`.
-"""),
+""", node_dependent=True),
     Q("c75", "inspecting-4", TS, "get-format", """
 In namespace {ns}, write the full YAML of Pod `fe` as it exists in the cluster to `/opt/course/{ns}/fe.yaml`.
 """),
@@ -587,6 +589,30 @@ In namespace {ns}, PersistentVolumeClaim `manual-pvc` asks for storageClassName 
     Q("c89", "storage-6", ST, "get", """
 Write the name of the default StorageClass (or the `k get sc` output that shows it) to `/opt/course/{ns}/defaultsc.txt`.
 """),
+    Q("c90", "nodes-1", CA, "label-taint", """
+Add the label `disk=ssd` to node `k8squest-control-plane`.
+""", node_dependent=True),
+    Q("c91", "nodes-2", CA, "label-taint", """
+Remove the label `disk` from node `k8squest-control-plane`.
+""", node_dependent=True),
+    Q("c92", "nodes-3", CA, "get", """
+Write the labels of all nodes to `/opt/course/{ns}/nodelabels.txt`.
+""", node_dependent=True),
+    Q("c93", "nodes-5", CA, "label-taint", """
+Taint node `k8squest-control-plane` with key `dedicated`, value `gpu` and effect `NoSchedule`.
+""", node_dependent=True),
+    Q("c94", "nodes-6", CA, "label-taint", """
+Node `k8squest-control-plane` is tainted `dedicated=gpu:NoSchedule`. Remove that taint. Leave the node's other taints as they are.
+""", node_dependent=True),
+    Q("c95", "nodes-7", CA, "node-maint", """
+In namespace {ns}, Pod `web` is running on node `k8squest-control-plane`. Mark the node unschedulable without evicting any Pod: `web` must keep running.
+""", node_dependent=True),
+    Q("c96", "scheduling-4", WL, "apply", """
+In namespace {ns}, node `k8squest-control-plane` is tainted `dedicated=gpu:NoSchedule`. Create a Pod named `tol` (image `nginx`) that is allowed to run there; it must be scheduled onto the node.
+""", node_dependent=True),
+    Q("c97", "scheduling-6", WL, "label-taint", """
+In namespace {ns}, Pod `ssdpod` is Pending because no node has the label `disk=ssd`. Fix it without touching the Pod, so that it is scheduled onto node `k8squest-control-plane`.
+""", node_dependent=True),
 ]
 BY_ID_QUESTION = {t["id"]: t for t in QUESTION_TASKS}
 assert len(BY_ID_QUESTION) == len(QUESTION_TASKS) and not set(BY_ID_QUESTION) & set(BY_ID_ALL), "duplicate task id"

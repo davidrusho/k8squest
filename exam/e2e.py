@@ -106,6 +106,8 @@ def main():
                          pool.cluster_objects_for(t, a.kind), t.get("solution_extra", ()), t["id"]))
     bad = 0
     for rel, ns, ren, co, ex, tid_of in jobs:
+        for w in levels.reset_node_state():       # a node change of the previous job must not leak into this one
+            print("node reset warning:", w)
         r = prove(rel, ns, ren, co, poll=a.poll, extra=ex)
         print(f"{r['verdict']:24} {rel}  ns={ns}", flush=True)
         if r["verdict"] != "OK":

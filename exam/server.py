@@ -136,7 +136,17 @@ class Exam:
                 if r.returncode:
                     warnings.append("cka-hosts-reset failed: " + (r.stderr or r.stdout).strip()[-200:])
             warnings += self._remove_exam_namespaces()
-            warnings += levels.reset_node_state(self.cluster.run)
+            try:
+                self.drill.node_mark_dirty()             # drill.json's epoch and owner follow the node: unknown first
+            except Exception as e:
+                warnings.append("could not update drill.json: %s" % type(e).__name__)
+            node_warns = levels.reset_node_state(self.cluster.run)
+            warnings += node_warns
+            if not node_warns:
+                try:
+                    self.drill.node_mark_clean()
+                except Exception as e:
+                    warnings.append("could not update drill.json: %s" % type(e).__name__)
             with self.lock:
                 self.session = sess
                 self._save()

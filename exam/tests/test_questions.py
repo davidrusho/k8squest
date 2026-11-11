@@ -218,11 +218,14 @@ class ReviewFixes(unittest.TestCase):
         self.assertIn(["kubectl", "delete", "pv/drill-c98-data", "--ignore-not-found", "--wait=false"], cluster.calls)
 
 
-NODE = "k8squest-control-plane"     # the kind node name is a literal, not the namespace token; only c44 may carry it
+NODE = "k8squest-control-plane"     # the kind node name is a literal, not the namespace token; only the node tasks may carry it
+
+
+NODE_TASKS = {"c44", "c90", "c91", "c92", "c93", "c94", "c95", "c96", "c97"}   # exactly the tasks that name the node
 
 
 def strip_node(task_id, text):
-    return text.replace(NODE, "") if task_id == "c44" else text
+    return text.replace(NODE, "") if task_id in NODE_TASKS else text
 
 
 class AllQuestionTasks(unittest.TestCase):

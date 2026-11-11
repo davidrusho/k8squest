@@ -221,12 +221,25 @@ class NodeReset(unittest.TestCase):
             return SimpleNamespace(returncode=rc, stdout=nodes if args[1:3] == ["get", "nodes"] else "", stderr=stderr if rc else "")
         return run, calls
 
-    def test_removes_only_the_two_labels_and_uncordons_never_taints(self):
+    def test_removes_the_exam_labels_and_taint_keys_and_uncordons(self):
         run, calls = self.runner()
         self.assertEqual(levels.reset_node_state(run), [])
-        self.assertIn(["kubectl", "label", "node/n1", "accelerator-", "gpu-type-"], calls)
+        self.assertEqual(levels.NODE_LABEL_KEYS, ("accelerator", "gpu-type", "disk"))
+        self.assertEqual(levels.NODE_TAINT_KEYS, ("dedicated",))
+        self.assertIn(["kubectl", "label", "node/n1", "accelerator-", "gpu-type-", "disk-"], calls)
+        self.assertIn(["kubectl", "taint", "nodes", "n1", "dedicated-"], calls)
         self.assertIn(["kubectl", "uncordon", "node/n1"], calls)
-        self.assertFalse([c for c in calls if "taint" in c or "cordon" in c and "uncordon" not in c])
+        # only the named taint key is ever removed; nothing is cordoned or tainted
+        self.assertEqual([c for c in calls if "taint" in c], [["kubectl", "taint", "nodes", "n1", "dedicated-"]])
+        self.assertFalse([c for c in calls if "cordon" in c and "uncordon" not in c])
+
+    def test_a_missing_taint_is_not_a_warning_but_a_real_failure_is(self):
+        run, _ = self.runner(fail="taint", stderr='error: taint "dedicated" not found')
+        self.assertEqual(levels.reset_node_state(run), [])
+        run, _ = self.runner(fail="taint", stderr="forbidden")
+        w = levels.reset_node_state(run)
+        self.assertEqual(len(w), 1)
+        self.assertIn("taint dedicated", w[0])
 
     def test_failures_are_warnings_but_missing_labels_are_not(self):
         run, _ = self.runner(fail="label", stderr="boom")
