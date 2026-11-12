@@ -125,6 +125,8 @@ class Exam:
         try:
             if not self.drill.wait_idle(self.drain_timeout):
                 # a drill deploy still running would delete exam objects after the exam is live: refuse the start
+                if any(pool.DRILL_BY_ID.get(i, {}).get("cluster") == "kubeadm" for i in list(self.drill.busy)):
+                    raise Conflict("A kubeadm cluster reset is in progress and may take a few minutes. Try again shortly.")
                 raise Conflict("A drill task is still being prepared. Try again in a minute.")
             with self.lock:
                 if self.session and not self.session.ended:

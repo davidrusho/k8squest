@@ -22,6 +22,8 @@ DIRTY = "?"                       # node_owner value: the node may hold changes 
 NODE_CLEARED = "The node held another task's changes; it was reset before this check."
 NODE_REBUILT = "This task's node setup was rebuilt, because the node was reset since you last worked on it."
 NODE_UNDONE = "Node changes from this task were undone."
+STALE_KUBEADM = "The kubeadm cluster no longer holds this task's setup. Press Reset task, then redo it."
+KUBEADM_DIRTY = "The kubeadm cluster holds this task's changes; it is rolled back before the next kubeadm task."
 
 
 class Conflict(Exception):
@@ -52,7 +54,10 @@ class Drill:
         self.data = drillfile.load()
         self.data.setdefault("node_epoch", 0)     # bumped every time the shared node is reset
         self.data.setdefault("node_owner", None)  # the node_dependent task whose setup the node holds, or None
+        self.data.setdefault("kubeadm_epoch", 0)  # bumped every time the kubeadm cluster is rolled back
+        self.data.setdefault("kubeadm_owner", None)   # the kubeadm task whose setup the cluster holds; "?" = unknown or dirty
         self.busy = set()
+        self.kubeadm_lock = threading.Lock()      # serialises every kubeadm-cluster sequence (rollback takes minutes); like node_lock
         self.node_lock = threading.Lock()         # serialises every node-touching sequence; never taken while holding self.lock
 
     # ---- helpers
@@ -110,6 +115,7 @@ class Drill:
                 "pattern": t.get("pattern"), "source": t.get("source", "exam"),
                 "failed_in_exam": self._failed_in_exam(tid), "opened": r["opened"], "deployed": r["deployed"],
                 "attempts": r["attempts"], "solved": r["solved"], "solved_at": r["solved_at"],
+                "cluster": t.get("cluster"),
                 "hints_revealed": r["hints_revealed"], "last_output": self._shown(r, r["last_output"]),
                 "output_withheld": r["last_output"] is not None and self._shown(r, r["last_output"]) is None,
                 "last_passed": r["last_passed"], "notice": r.get("notice")}
@@ -134,7 +140,7 @@ class Drill:
     def _payload(self, tid, host="cka1"):
         v = self._view(tid)
         v.update(self._texts(tid))
-        v.update({"text": pool.render_text(pool.DRILL_BY_ID[tid], host, KIND), "namespace": pool.namespace(tid, KIND)})
+        v.update({"text": pool.render_text(pool.DRILL_BY_ID[tid], host, KIND), "namespace": None if pool.DRILL_BY_ID[tid].get("cluster") == "kubeadm" else pool.namespace(tid, KIND)})
         return v
 
     # ---- API
@@ -171,9 +177,11 @@ class Drill:
         return warns, epoch
 
     def node_mark_dirty(self):
-        """An exam start is about to reset the node: bump the epoch and mark the node unknown first."""
+        """An exam start is about to reset the node: bump the epoch and mark the node unknown first. The kubeadm cluster
+        is marked unknown as well (owner only, no epoch bump)."""
         with self.node_lock:
             self._set_node(DIRTY, bump=True)
+        self._set_kubeadm(DIRTY)        # an exam candidate can reach the kubeadm cluster too: no rollback now, the next kubeadm open does it
 
     def node_mark_clean(self):
         """The exam start's node reset finished without warnings."""
@@ -219,6 +227,8 @@ class Drill:
             time.sleep(0.1)
 
     def open(self, tid):
+        if self._task(tid).get("cluster") == "kubeadm":
+            return self._kubeadm_open(self._task(tid), force=False)
         with self.lock:
             self.guard()
             t = self._task(tid)
@@ -252,6 +262,83 @@ class Drill:
             self.guard()
             r["opened"] = True
             self._save()
+            return self._payload(tid)
+
+    # ---- kubeadm tasks: the two-VM cluster is one shared resource, owned like the node but reset by a snapshot rollback
+    def _set_kubeadm(self, owner, bump=False):
+        with self.lock:
+            if bump:
+                self.data["kubeadm_epoch"] = self.data.get("kubeadm_epoch", 0) + 1
+            self.data["kubeadm_owner"] = owner
+            self._save()
+            return self.data["kubeadm_epoch"]
+
+    def _kubeadm_build(self, t, r):
+        """Roll the cluster back, apply the task's setup and make the task the owner. The caller holds kubeadm_lock and
+        busy. The epoch bump and DIRTY are persisted BEFORE the rollback, so a crash or a failure leaves the cluster
+        marked unknown. Returns the notice text."""
+        tid = t["id"]
+        started = self.now()
+        self.guard()
+        epoch = self._set_kubeadm(DIRTY, bump=True)
+        with self.lock:
+            r["deployed"] = False
+            self._save()
+        ok, msg, gen = self.cluster.kubeadm_rollback()       # gen: the token the helper printed for this very rollback
+        if not ok:
+            raise RuntimeError("could not roll the kubeadm cluster back: " + msg)
+        self.guard()
+        ok, msg = self.cluster.kubeadm_setup(t["level"])
+        if not ok:
+            raise RuntimeError("could not prepare the kubeadm task: " + msg)
+        took = max(0, int(round(self.now() - started)))
+        with self.lock:
+            # the solution may have been revealed while this build ran: then nobody owns the cluster, as in hint()
+            self.data["kubeadm_owner"] = DIRTY if r["hints_revealed"] >= MAX_HINT else tid
+            r["deployed"] = True
+            r["kubeadm_epoch"] = epoch
+            r["kubeadm_gen"] = gen
+            self._save()
+        return "Rolled the kubeadm cluster back to a clean snapshot (took %ds)." % took
+
+    def _kubeadm_open(self, t, force):
+        """Open (force=False) or Reset (force=True) a kubeadm task. When the cluster already holds this task's setup, an
+        open only makes sure the VMs are up; otherwise (or on Reset) the cluster is rolled back and the setup applied.
+        Holds busy for the whole sequence, so an exam start waits for it."""
+        tid = t["id"]
+        with self.lock:
+            self.guard()
+            r = self._rec(tid)
+            if tid in self.busy:
+                raise ValueError("a check or reset is already running")
+            self.busy.add(tid)
+        try:
+            with self.kubeadm_lock:
+                with self.lock:
+                    holds = (not force and r["deployed"] and self.data.get("kubeadm_owner") == tid
+                             and r.get("kubeadm_epoch") == self.data.get("kubeadm_epoch", 0))
+                if holds:      # someone else (another helper caller, e2e) may have rolled the VMs back since
+                    holds = r.get("kubeadm_gen") == self.cluster.kubeadm_generation()
+                notice = None
+                if holds:
+                    self.guard()
+                    ok, msg = self.cluster.kubeadm_ensure_up()
+                    if not ok:
+                        raise RuntimeError("could not start the kubeadm cluster: " + msg)
+                else:
+                    notice = self._kubeadm_build(t, r)
+            with self.lock:
+                self.guard()
+                r["opened"] = True
+                if notice is not None:
+                    r["notice"] = notice
+                    r["last_output"] = None
+                    r["last_passed"] = None
+                self._save()
+        finally:
+            with self.lock:
+                self.busy.discard(tid)
+        with self.lock:
             return self._payload(tid)
 
     def _sync_node_on_open(self, t):
@@ -294,26 +381,10 @@ class Drill:
                 raise ValueError("a check or reset is already running")
             self.busy.add(tid)
         try:
-            with self.node_lock:
-                notice = None
-                if t.get("node_dependent"):
-                    with self.lock:
-                        if self.data.get("node_owner") != tid or r.get("epoch") != self.data.get("node_epoch", 0):
-                            raise Conflict(STALE_NODE)      # refused: the validator is not run and no attempt is counted
-                else:
-                    with self.lock:
-                        foreign = self.data.get("node_owner") is not None      # another task's (or unknown) node changes
-                    if foreign:
-                        self.guard()
-                        warns, _ = self._reset_node()
-                        notice = NODE_CLEARED + ((" " + self._warn_text(warns)) if warns else "")
-                self.guard()
-                passed, out = self.cluster.validate(t["level"], pool.namespace(tid, KIND), pool.renames_for(t, KIND))
-                if passed and t.get("node_dependent"):
-                    # a node task changes the node the K8sQuest game shares: put it back, and say so
-                    self.guard()
-                    warns, _ = self._reset_node()
-                    notice = NODE_UNDONE + ((" " + self._warn_text(warns)) if warns else "")
+            if t.get("cluster") == "kubeadm":
+                passed, out, notice = self._grade_kubeadm(t, r)
+            else:
+                passed, out, notice = self._grade_kind(t, r)
             out = _clean(out)
             with self.lock:
                 self.guard()                          # the exam started during the check: discard, do not record
@@ -334,6 +405,48 @@ class Drill:
             with self.lock:
                 self.busy.discard(tid)
 
+    def _grade_kubeadm(self, t, r):
+        """Validate a kubeadm task. Refused with a 409 when the cluster does not hold its setup. A pass marks the cluster
+        dirty: the rollback is left to the next kubeadm open, because it takes minutes."""
+        tid = t["id"]
+        with self.kubeadm_lock:
+            with self.lock:
+                if self.data.get("kubeadm_owner") != tid or r.get("kubeadm_epoch") != self.data.get("kubeadm_epoch", 0):
+                    raise Conflict(STALE_KUBEADM)       # refused: the validator is not run and no attempt is counted
+            if r.get("kubeadm_gen") != self.cluster.kubeadm_generation():
+                raise Conflict(STALE_KUBEADM)       # the cluster was rolled back by someone else since the setup
+            self.guard()
+            passed, out = self.cluster.kubeadm_validate(t["level"])
+            notice = None
+            if passed:
+                self._set_kubeadm(DIRTY)
+                notice = KUBEADM_DIRTY
+        return passed, out, notice
+
+    def _grade_kind(self, t, r):
+        tid = t["id"]
+        with self.node_lock:
+            notice = None
+            if t.get("node_dependent"):
+                with self.lock:
+                    if self.data.get("node_owner") != tid or r.get("epoch") != self.data.get("node_epoch", 0):
+                        raise Conflict(STALE_NODE)      # refused: the validator is not run and no attempt is counted
+            else:
+                with self.lock:
+                    foreign = self.data.get("node_owner") is not None      # another task's (or unknown) node changes
+                if foreign:
+                    self.guard()
+                    warns, _ = self._reset_node()
+                    notice = NODE_CLEARED + ((" " + self._warn_text(warns)) if warns else "")
+            self.guard()
+            passed, out = self.cluster.validate(t["level"], pool.namespace(tid, KIND), pool.renames_for(t, KIND))
+            if passed and t.get("node_dependent"):
+                # a node task changes the node the K8sQuest game shares: put it back, and say so
+                self.guard()
+                warns, _ = self._reset_node()
+                notice = NODE_UNDONE + ((" " + self._warn_text(warns)) if warns else "")
+        return passed, out, notice
+
     def hint(self, tid, n):
         if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= MAX_HINT:
             raise ValueError("n must be an integer from 1 to 4")
@@ -349,6 +462,9 @@ class Drill:
                 if undo and tid in self.busy:
                     raise ValueError("a check or reset is already running")
                 r["hints_revealed"] = n
+                if n == MAX_HINT and t.get("cluster") == "kubeadm" and self.data.get("kubeadm_owner") == tid:
+                    self.data["kubeadm_owner"] = DIRTY      # the solution was shown: do not grade this state again
+                    r["notice"] = KUBEADM_DIRTY
                 self._save()
             if not undo:
                 return self._payload(tid)
@@ -375,6 +491,8 @@ class Drill:
         with self.lock:
             self.guard()
             t = self._task(tid)
+        if t.get("cluster") == "kubeadm":
+            return self._kubeadm_open(t, force=True)       # a fresh state is only guaranteed by a rollback
         self._rebuild(t)
         with self.lock:
             return self._payload(tid)
@@ -415,7 +533,9 @@ class Drill:
         """An exam start removes every drill namespace: forget which tasks were deployed."""
         with self.lock:
             changed = False
-            for r in self.data["tasks"].values():
+            for tid, r in self.data["tasks"].items():
+                if pool.BY_ID_QUESTION.get(tid, {}).get("cluster") == "kubeadm":
+                    continue        # an exam start does not touch the kubeadm cluster
                 if r.get("deployed"):
                     r["deployed"] = False
                     changed = True

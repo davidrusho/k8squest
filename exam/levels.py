@@ -269,6 +269,99 @@ def validate(rel, namespace, renames=None, timeout=120):
         cleanup(lvl)
 
 
+# ---- kubeadm tasks: they run on the two-VM kubeadm cluster, not on kind. Every step goes through the root helper
+# (exam/hosts/cka-kubeadm, deployed to /usr/local/sbin); the Proxmox token never reaches this process.
+KUBEADM_HELPER = ["sudo", "-n", "/usr/local/sbin/cka-kubeadm"]
+KUBEADM_TASK_NS = "kubeadm"       # materialize() needs a namespace; kubeadm task files do not use the token
+
+
+_TOKEN_RE = re.compile(r"PVEAPIToken=\S+")
+
+
+# Timeouts, so that this side never gives up before the helper does. The helper waits for its root lock (ensure-up and
+# rollback up to 420 s, run-on up to 60 s) and then runs: rollback or ensure-up up to 420 s, run-on up to its --timeout.
+# rollback / ensure-up: 420 + 420 = 840 s worst case -> 900 s here.
+# setup / solution: 60 + 240 = 300 s -> 330 s here. validate.sh makes one run-on --timeout 150: 60 + 150 = 210 s -> 240 s here.
+RUN_ON_SECONDS = 240
+KUBEADM_STEP_TIMEOUT = 900
+KUBEADM_SCRIPT_TIMEOUT = 330
+KUBEADM_VALIDATE_TIMEOUT = 240
+
+
+def _kubeadm_helper(args, timeout, input=None, stdout=False):
+    """(ok, message), or (ok, message, stdout) when stdout=True. The message is stderr only and goes to the browser,
+    so anything shaped like the Proxmox token is redacted first."""
+    r = run(KUBEADM_HELPER + list(args), timeout=timeout, input=input, env=dict(os.environ))
+    text = _TOKEN_RE.sub("PVEAPIToken=<redacted>", (r.stderr or ("" if stdout else r.stdout)))
+    res = (r.returncode == 0, text.strip()[-400:])
+    return res + (r.stdout or "",) if stdout else res
+
+
+def kubeadm_generation():
+    """The helper's rollback generation: a random token replaced at the start of every rollback attempt ("none" before the
+    first). Compared for equality only. Raises RuntimeError when it cannot be read."""
+    r = run(KUBEADM_HELPER + ["generation"], timeout=60, env=dict(os.environ))
+    out = (r.stdout or "").strip()
+    if r.returncode != 0 or not re.fullmatch(r"[0-9a-f]{16}|none", out):
+        raise RuntimeError("could not read the kubeadm cluster generation: " + _TOKEN_RE.sub("<redacted>", (r.stderr or ""))[-200:])
+    return out
+
+
+def kubeadm_rollback():
+    """Roll both VMs back to the clean snapshot, start them and wait for the cluster. Returns (ok, message, generation):
+    the generation comes from the helper's own `GENERATION=<token>` stdout line (None on failure)."""
+    ok, msg, out = _kubeadm_helper(["rollback"], KUBEADM_STEP_TIMEOUT, stdout=True)
+    m = re.search(r"^GENERATION=([0-9a-f]{16})$", out, re.M)
+    if ok and not m:
+        return False, "the helper did not report a generation", None
+    return ok, msg, (m.group(1) if ok else None)
+
+
+def kubeadm_ensure_up():
+    """Start a stopped VM and wait for the cluster, without any rollback. Returns (ok, message)."""
+    return _kubeadm_helper(["ensure-up"], KUBEADM_STEP_TIMEOUT)
+
+
+def _kubeadm_script(rel, name):
+    """Run <name> (setup.sh or solution.sh) of a kubeadm task as root on controlplane, or on node01 when its first
+    line is `# node: node01`. A missing file is fine. Returns (ok, message)."""
+    lvl = materialize(rel, KUBEADM_TASK_NS)
+    try:
+        f = lvl / name
+        if not f.is_file():
+            return True, ""
+        text = f.read_text()
+        if not text.strip():
+            return False, "%s is empty" % name
+        head = ([l.strip() for l in text.split("\n", 2)[:2]] + ["", ""])[:2]       # a one-line file has no line 2
+        # the directive is line 1, or line 2 after a shebang
+        node = "node01" if head[0] == "# node: node01" or (head[0].startswith("#!") and head[1] == "# node: node01") else "controlplane"
+        return _kubeadm_helper(["run-on", "--timeout", str(RUN_ON_SECONDS), node], KUBEADM_SCRIPT_TIMEOUT, input=text)
+    finally:
+        cleanup(lvl)
+
+
+def kubeadm_setup(rel):
+    return _kubeadm_script(rel, "setup.sh")
+
+
+def kubeadm_solution(rel):
+    """The task's solution.sh, run like setup.sh. Used by the e2e proof only."""
+    return _kubeadm_script(rel, "solution.sh")
+
+
+def kubeadm_validate(rel, timeout=KUBEADM_VALIDATE_TIMEOUT):
+    """Run validate.sh on this host (as david); it reaches the VMs through the helper. Returns (passed, output)."""
+    lvl = materialize(rel, KUBEADM_TASK_NS)
+    try:
+        # KUBECONFIG=/dev/null: a bare kubectl in a validator must fail rather than silently use the kind cluster
+        r = run(["bash", "validate.sh"], cwd=str(lvl), timeout=timeout, env={**os.environ, "KUBECONFIG": "/dev/null"})
+        out = (r.stdout or "") + (("\n" + r.stderr) if r.stderr.strip() else "")
+        return r.returncode == 0, out.strip()
+    finally:
+        cleanup(lvl)
+
+
 def level_texts(rel, namespace, renames=None):
     """The level's player-facing text, rewritten like the deployed copy: {"hints": [h1, h2, h3], "solution", "debrief"}.
     A missing file gives None. Reads files only; the level directory is never modified."""

@@ -313,11 +313,14 @@ PATTERNS = [
 PATTERN_IDS = {p["id"] for p in PATTERNS}
 
 
-def Q(id, qid, domain, pattern, text, renames=None, cluster_objects=(), solution_extra=(), node_reset=False, node_dependent=False):
-    """A short-kubectl-question task from the drill page. Its directory is exam/questions/<qid>/. Drill-only."""
+def Q(id, qid, domain, pattern, text, renames=None, cluster_objects=(), solution_extra=(), node_reset=False, node_dependent=False,
+      cluster=None):
+    """A short-kubectl-question task from the drill page. Its directory is exam/questions/<qid>/. Drill-only.
+    cluster="kubeadm": a kubeadm task, run on the two-VM kubeadm cluster instead of kind (no namespace, no broken.yaml;
+    setup.sh, validate.sh and solution.sh go through the cka-kubeadm helper)."""
     assert pattern in PATTERN_IDS, f"{id}: unknown pattern {pattern!r}"
     t = T(id, f"questions/{qid}", domain, text, renames, cluster_objects, solution_extra, node_reset, node_dependent)
-    t.update({"source": "question", "qid": qid, "pattern": pattern})
+    t.update({"source": "question", "qid": qid, "pattern": pattern, "cluster": cluster})
     return t
 
 
@@ -620,6 +623,9 @@ Write the list of the Pods that are not Running, taken from all namespaces (not 
     Q("c99", "debugging-6", TS, "explain", """
 Write the documented fields of a Pod's `tolerations` (the output of kubectl's built-in API documentation for `pod.spec.tolerations`, with its KIND and FIELD header lines) to `/opt/course/{ns}/tolerations.txt`.
 """),
+    Q("c100", "etcd-3", CA, "lookup", """
+On the kubeadm cluster, take an etcd snapshot to `/opt/backup.db` on the control plane node. Connect with `ssh controlplane` (user candidate, sudo is allowed). Use the control plane certificates: CA `/etc/kubernetes/pki/etcd/ca.crt`, certificate `server.crt` and key `server.key` in the same folder. etcd listens on `https://127.0.0.1:2379`.
+""", cluster="kubeadm"),
 ]
 BY_ID_QUESTION = {t["id"]: t for t in QUESTION_TASKS}
 assert len(BY_ID_QUESTION) == len(QUESTION_TASKS) and not set(BY_ID_QUESTION) & set(BY_ID_ALL), "duplicate task id"

@@ -235,6 +235,8 @@ class AllQuestionTasks(unittest.TestCase):
         for t in pool.QUESTION_TASKS:
             d = levels.level_dir(t["level"])
             for f in self.FILES:
+                if f == "broken.yaml" and t.get("cluster") == "kubeadm":
+                    continue        # a kubeadm task has setup.sh instead
                 self.assertTrue((d / f).is_file() and (d / f).read_text().strip(), f"{t['id']}: {f}")
             self.assertIn(t["pattern"], pool.PATTERN_IDS, t["id"])
             self.assertIn("Pattern: ", (d / "hint-3.txt").read_text())
@@ -275,6 +277,9 @@ class AllQuestionTasks(unittest.TestCase):
             p = levels.materialize(t["level"], pool.namespace(t["id"], "drill"), pool.renames_for(t, "drill"))
             try:
                 for f in ("broken.yaml", "validate.sh", "solution.sh"):
+                    if not (p / f).is_file():
+                        self.assertEqual((t.get("cluster"), f), ("kubeadm", "broken.yaml"))
+                        continue
                     txt = (p / f).read_text()
                     self.assertNotIn("k8squest", strip_node(t["id"], txt), (t["id"], f))
                     self.assertNotRegex(txt, r"\b(devns|prodns)\b", (t["id"], f))
@@ -286,7 +291,7 @@ class AllQuestionTasks(unittest.TestCase):
     def test_every_rename_key_occurs_as_a_whole_token_in_a_raw_file(self):
         for t in pool.QUESTION_TASKS:
             d = levels.level_dir(t["level"])
-            raw = "\n".join((d / f).read_text() for f in self.RAW)
+            raw = "\n".join((d / f).read_text() for f in self.RAW if (d / f).is_file())
             for old in t.get("renames", {}):
                 self.assertRegex(raw, r"(?<![\w-])" + re.escape(old) + r"(?![\w-])", (t["id"], old))
 
@@ -300,6 +305,8 @@ class AllQuestionTasks(unittest.TestCase):
             ren = pool.renames_for(t, "drill")
             have = {o.lower() for o in pool.cluster_objects_for(t, "drill")}
             for f in ("broken.yaml", "solution.sh"):
+                if not (d / f).is_file():
+                    continue
                 for m in pat.finditer((d / f).read_text()):
                     kind = (m.group(1) or m.group(3)).lower()
                     name = m.group(2) or m.group(4)
@@ -330,6 +337,9 @@ class AllQuestionTasks(unittest.TestCase):
             d = levels.level_dir(t["level"])
             texts = {f.name: f.read_text() for f in d.iterdir() if f.is_file()}
             for name, txt in texts.items():
+                if t.get("cluster") == "kubeadm":      # the only sudo allowed is the helper, never a bare one
+                    self.assertEqual(txt.count("sudo"), txt.count("sudo -n /usr/local/sbin/cka-kubeadm "), (t["id"], name))
+                    continue
                 self.assertNotIn("sudo", txt, (t["id"], name))
             if not any("/opt/course" in x for x in texts.values()):
                 continue

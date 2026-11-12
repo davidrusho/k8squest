@@ -1,0 +1,1 @@
+`etcdctl snapshot save` needs the endpoint and the three TLS files (`--cacert`, `--cert`, `--key`); on a kubeadm control plane they are in `/etc/kubernetes/pki/etcd/` and etcd listens on `https://127.0.0.1:2379`. Check a snapshot with `etcdutl snapshot status <file>` (in etcd 3.6 the status command lives in `etcdutl`, not `etcdctl`).

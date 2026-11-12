@@ -347,6 +347,7 @@
     return D;
   }
   const dTask = (id) => (D ? D.tasks.find((t) => t.id === id) : null);
+  const isKubeadm = (id) => { const t = dTask(id); return !!t && t.cluster === "kubeadm"; };
 
   function renderDrill() {
     const side = $("drill-side");
@@ -484,7 +485,7 @@
     if (dbusy) return;
     dcur = id; applyChrome();
     try {
-      const p = await drillCall("/api/drill/open", { id }, dpay[id] ? null : "Preparing the environment for this task. This can take up to a minute...");
+      const p = await drillCall("/api/drill/open", { id }, isKubeadm(id) ? "Preparing the kubeadm cluster (a reset takes a few minutes)..." : (dpay[id] ? null : "Preparing the environment for this task. This can take up to a minute..."));
       dpay[id] = p;
       if (dstart[id] == null) dstart[id] = performance.now();
       await refreshDrill();
@@ -509,9 +510,9 @@
   function drillReset() {
     const id = dcur;
     if (!id || dbusy) return;
-    modal("Reset task", "Delete the namespace and rebuild the broken state? Your changes to this task's objects are lost. Attempts, solved and revealed hints are kept.", "Reset", async () => {
+    modal("Reset task", isKubeadm(id) ? "Roll the kubeadm cluster back to its clean snapshot and rebuild the starting state? This takes a few minutes and undoes every change on both VMs. Attempts, solved and revealed hints are kept." : "Delete the namespace and rebuild the broken state? Your changes to this task's objects are lost. Attempts, solved and revealed hints are kept.", "Reset", async () => {
       try {
-        dpay[id] = await drillCall("/api/drill/reset", { id }, "Rebuilding the broken state...");
+        dpay[id] = await drillCall("/api/drill/reset", { id }, isKubeadm(id) ? "Resetting the kubeadm cluster, this takes a few minutes..." : "Rebuilding the broken state...");
         dstart[id] = performance.now();
         await refreshDrill();
         render();

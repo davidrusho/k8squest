@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+"""Root helper for the kubeadm practice cluster (T-615.24). Deployed to /usr/local/sbin/cka-kubeadm and called by
+exam/server.py as `sudo -n /usr/local/sbin/cka-kubeadm <subcommand>`. Python 3 standard library only.
+
+  ensure-up            start whichever of VM 111 / 112 is stopped, then wait until the cluster is ready
+  rollback             roll both VMs back to the snapshot k8s-1-36-clean, start them, wait until ready
+  generation           print the rollback generation: a random token, replaced at the START of every rollback attempt
+  run-on [--timeout N] <node>
+                       node is controlplane or node01; reads a bash script on stdin and runs it there as root
+                       (sudo -u david ssh david@<ip> sudo bash -s), relaying stdout, stderr and the exit code;
+                       waits at most 60 s for the lock and gives up after N seconds (default 240) of running
+rollback prints GENERATION=<token> on stdout when it succeeds. ensure-up and rollback wait up to 420 s for the root
+flock (/run/cka-kubeadm.lock) that keeps two helpers from interleaving; run-on waits up to 60 s.
+
+"Ready" = both VMs running, ssh `true` works to both IPs, and `kubectl get nodes` shows controlplane and node01 Ready.
+Overall timeout 420 s, polled every 5 s, one progress line per phase on stderr.
+The Proxmox API token is read from /etc/cka-hosts/pve-token (one line, the full Authorization header value) into a
+request header only: never into argv or the environment of a child, never printed. Errors print the HTTP status and
+the PVE message. Exit codes: 0 ok, 1 failure, 2 usage.
+"""
+import contextlib
+import fcntl
+import json
+import os
+import re
+import secrets
+import ssl
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from urllib.parse import quote
+
+TOKEN_FILE = "/etc/cka-hosts/pve-token"
+CA_FILE = "/etc/cka-hosts/pve-ca.pem"      # the Proxmox root CA (/etc/pve/pve-root-ca.pem on prox)
+GEN_FILE = "/var/lib/cka-kubeadm/generation"
+LOCK_FILE = "/run/cka-kubeadm.lock"
+PVE_BASE = "https://192.168.1.217:8006/api2/json"
+KUBECONFIG = "/etc/cka-hosts/cluster1.kubeconfig"
+SNAPSHOT = "k8s-1-36-clean"
+ADMIN_USER = "david"
+NODES = {"controlplane": (111, "192.168.1.226"), "node01": (112, "192.168.1.227")}
+TIMEOUT = 420
+POLL = 5
+RUN_ON_TIMEOUT = 240
+SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
+TOKEN_RE = re.compile(r"PVEAPIToken=\S+")
+RUN_ON_LOCK_WAIT = 60
+USAGE = "usage: cka-kubeadm ensure-up | rollback | generation | run-on [--timeout N] <controlplane|node01> < script"
+
+
+class Failure(Exception):
+    """A step failed; the message is safe to print (no token, no kubeconfig)."""
+
+
+# ---- the real side effects. Everything below talks to the outside world only through these three.
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """The Authorization header must never follow a redirect: the 3xx is returned as an error instead."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def real_http(method, url, token):
+    """(status, parsed json or None, reason). The server certificate must chain to the Proxmox root CA in CA_FILE.
+    Errors name the exception type only (plus the reason of a URLError when it is an OS or TLS error): a ValueError
+    raised for a bad header would otherwise quote the token."""
+    try:
+        # The chain to this one private CA is what is pinned. The hostname check is off because the node certificate's
+        # SANs (127.0.0.1, localhost, 192.168.1.50, homelab, ...) do not include the address we use, 192.168.1.217.
+        try:
+            ctx = ssl.create_default_context(cafile=CA_FILE)
+        except (OSError, ssl.SSLError) as e:
+            raise Failure("cannot load the Proxmox CA %s (%s)" % (CA_FILE, type(e).__name__)) from None
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        # Python 3.13 turned VERIFY_X509_STRICT on by default; Proxmox's self-made CA may lack an Authority Key
+        # Identifier and would be rejected. The CA is pinned by file, so the strict profile adds nothing here.
+        if hasattr(ssl, "VERIFY_X509_STRICT"):
+            ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx), _NoRedirect())
+        req = urllib.request.Request(url, method=method, data=b"" if method == "POST" else None,
+                                     headers={"Authorization": token, "Accept": "application/json"})
+        try:
+            with opener.open(req, timeout=30) as r:
+                status, reason, raw = r.status, r.reason, r.read()
+        except urllib.error.HTTPError as e:
+            status, reason, raw = e.code, e.reason, e.read()
+    except Failure:
+        raise
+    except urllib.error.URLError as e:
+        why = type(e.reason).__name__
+        if isinstance(e.reason, (ssl.SSLError, OSError)):
+            why += ": " + str(e.reason)[:120]
+        raise Failure("PVE request failed: URLError (%s)" % why) from None
+    except Exception as e:
+        raise Failure("PVE request failed: %s" % type(e).__name__) from None
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        body = None
+    return status, body, str(reason)
+
+
+def real_run(argv, env=None, input=None, capture=False, timeout=None):
+    """(returncode, stdout, stderr). Not captured: the child inherits our stdout and stderr (relay)."""
+    try:
+        r = subprocess.run(argv, env=env, input=input, capture_output=capture, text=True, errors="replace", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return 124, "", "timed out after %ss" % timeout
+    except FileNotFoundError:
+        return 127, "", "%s not found" % argv[0]
+    return r.returncode, r.stdout or "", r.stderr or ""
+
+
+def check_ca(path=CA_FILE):
+    """Refuse to talk to Proxmox without its CA: there is no unverified fallback."""
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        raise Failure("the Proxmox CA file %s is missing or empty; refusing to connect without verifying the server" % path)
+
+
+def read_token(path=TOKEN_FILE):
+    try:
+        with open(path) as f:
+            tok = f.read().strip()
+    except OSError as e:
+        raise Failure("cannot read the PVE token file (%s)" % type(e).__name__) from None
+    if not tok:
+        raise Failure("the PVE token file is empty")
+    if not TOKEN_RE.fullmatch(tok):        # one line, PVEAPIToken=<no whitespace>; never say what was in it
+        raise Failure("token file malformed")
+    return tok
+
+
+def read_generation(path=GEN_FILE):
+    """The current token, or "none" when no rollback was ever attempted."""
+    try:
+        with open(path) as f:
+            tok = f.read().strip()
+    except FileNotFoundError:
+        return "none"
+    except OSError as e:
+        raise Failure("cannot read the generation file (%s)" % type(e).__name__) from None
+    if not re.fullmatch(r"[0-9a-f]{16}", tok):
+        raise Failure("the generation file is malformed")
+    return tok
+
+
+def new_generation(path=GEN_FILE):
+    """Replace the token with a fresh random one, atomically (write a temp file, then rename)."""
+    tok = secrets.token_hex(8)
+    os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
+    tmp = path + ".new"
+    with open(tmp, "w") as f:
+        f.write(tok + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+    return tok
+
+
+@contextlib.contextmanager
+def real_lock(timeout, clock=time.monotonic, sleep=time.sleep, path=LOCK_FILE):
+    """A root flock around operations that must not interleave; waits up to `timeout` seconds."""
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        end = clock() + timeout
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if clock() >= end:
+                    raise Failure("another cka-kubeadm operation holds the lock; gave up after %ss" % timeout) from None
+                sleep(1)
+        yield
+    finally:
+        os.close(fd)
+
+
+class Kubeadm:
+    def __init__(self, token, http=real_http, run=real_run, sleep=time.sleep, clock=time.monotonic, log=None, lock=None,
+                 gen_path=GEN_FILE):
+        self._token = token         # only ever used as a request header
+        self.http, self.run, self.sleep, self.clock = http, run, sleep, clock
+        self.gen_path = gen_path
+        self._lock = lock or (lambda timeout: real_lock(timeout, self.clock, self.sleep))
+        self.log = log or (lambda m: print("cka-kubeadm: " + m, file=sys.stderr, flush=True))
+        self._pve_node = {}
+
+    # ---- Proxmox
+    def pve(self, method, path):
+        status, body, reason = self.http(method, PVE_BASE + path, self._token)
+        if status != 200:
+            msg = body.get("message") if isinstance(body, dict) and body.get("message") else reason
+            raise Failure("PVE %s %s: HTTP %s: %s" % (method, path.split("?")[0], status, str(msg)[:200]))
+        return body.get("data") if isinstance(body, dict) else None
+
+    def node_of(self, vmid):
+        if not self._pve_node:
+            for r in self.pve("GET", "/cluster/resources?type=vm") or []:
+                if isinstance(r, dict) and r.get("vmid") in [v for v, _ in NODES.values()] and r.get("node"):
+                    self._pve_node[r["vmid"]] = r["node"]
+        if vmid not in self._pve_node:
+            raise Failure("VM %s not found in the PVE resource list" % vmid)
+        return self._pve_node[vmid]
+
+    def vm_status(self, vmid):
+        d = self.pve("GET", "/nodes/%s/qemu/%s/status/current" % (self.node_of(vmid), vmid))
+        return d.get("status") if isinstance(d, dict) else None
+
+    def post_task(self, vmid, path):
+        upid = self.pve("POST", "/nodes/%s/qemu/%s/%s" % (self.node_of(vmid), vmid, path))
+        if not isinstance(upid, str) or not upid:
+            raise Failure("PVE returned no task id for VM %s %s" % (vmid, path))
+        return upid
+
+    def wait_task(self, vmid, upid, deadline, what):
+        node = self.node_of(vmid)
+        while True:
+            d = self.pve("GET", "/nodes/%s/tasks/%s/status" % (node, quote(upid, safe="")))
+            if isinstance(d, dict) and d.get("status") == "stopped":
+                exitstatus = str(d.get("exitstatus"))
+                if exitstatus.startswith("WARNINGS"):
+                    self.log("%s of VM %s finished with warnings" % (what, vmid))
+                elif exitstatus != "OK":
+                    raise Failure("%s of VM %s failed: %s" % (what, vmid, exitstatus[:200]))
+                return
+            if self.clock() >= deadline:
+                raise Failure("timed out waiting for %s of VM %s" % (what, vmid))
+            self.sleep(POLL)
+
+    def start_stopped(self, deadline):
+        started = [(v, self.post_task(v, "status/start")) for v, _ in NODES.values() if self.vm_status(v) == "stopped"]
+        for v, upid in started:
+            self.log("starting VM %s" % v)
+            self.wait_task(v, upid, deadline, "start")
+        return bool(started)
+
+    # ---- readiness
+    def ssh_ok(self, ip):
+        rc, _, _ = self.run(["sudo", "-n", "-H", "-u", ADMIN_USER, "ssh"] + SSH_OPTS + ["%s@%s" % (ADMIN_USER, ip), "true"],
+                            capture=True, timeout=30)
+        return rc == 0
+
+    def nodes_ready(self):
+        rc, out, _ = self.run(["kubectl", "get", "nodes", "-o", "json"], env=self.kube_env(), capture=True, timeout=30)
+        if rc != 0:
+            return False
+        try:
+            items = json.loads(out).get("items", [])
+        except ValueError:
+            return False
+        ready = {i["metadata"]["name"] for i in items
+                 if any(c.get("type") == "Ready" and c.get("status") == "True" for c in i.get("status", {}).get("conditions", []))}
+        return set(NODES) <= ready
+
+    def ready_phase(self):
+        """The first thing the cluster is still waiting for, or None when it is ready."""
+        if any(self.vm_status(v) != "running" for v, _ in NODES.values()):
+            return "VMs running"
+        if not all(self.ssh_ok(ip) for _, ip in NODES.values()):
+            return "ssh to both VMs"
+        if not self.nodes_ready():
+            return "both nodes Ready"
+        return None
+
+    def wait_ready(self, deadline):
+        last = None
+        while True:
+            phase = self.ready_phase()
+            if phase is None:
+                self.log("cluster ready")
+                return
+            if phase != last:
+                self.log("waiting for " + phase)
+                last = phase
+            if self.clock() >= deadline:
+                raise Failure("timed out after %ss waiting for %s" % (TIMEOUT, phase))
+            self.sleep(POLL)
+
+    @staticmethod
+    def kube_env():
+        return {**os.environ, "KUBECONFIG": KUBECONFIG}
+
+    # ---- subcommands
+    def ensure_up(self):
+        with self._lock(TIMEOUT):
+            deadline = self.clock() + TIMEOUT
+            self.start_stopped(deadline)
+            self.wait_ready(deadline)
+
+    def rollback(self):
+        """Returns the new generation token. The token is replaced BEFORE the first Proxmox call: whatever happens next
+        (a failed task, a timeout, a crash), anything recorded against the old state is stale."""
+        with self._lock(TIMEOUT):
+            deadline = self.clock() + TIMEOUT
+            gen = new_generation(self.gen_path)
+            tasks = [(v, self.post_task(v, "snapshot/%s/rollback" % SNAPSHOT)) for v, _ in NODES.values()]
+            self.log("rolling both VMs back to %s" % SNAPSHOT)
+            for v, upid in tasks:
+                self.wait_task(v, upid, deadline, "rollback")
+            self.start_stopped(deadline)
+            self.wait_ready(deadline)
+            return gen
+
+    def generation(self):
+        return read_generation(self.gen_path)
+
+    def run_on(self, node, script, timeout=RUN_ON_TIMEOUT):
+        if node not in NODES:
+            raise Failure("unknown node %r" % node)
+        with self._lock(RUN_ON_LOCK_WAIT):
+            rc, _, err = self.run(["sudo", "-n", "-H", "-u", ADMIN_USER, "ssh"] + SSH_OPTS +
+                                  ["%s@%s" % (ADMIN_USER, NODES[node][1]), "sudo", "bash", "-s"], input=script, timeout=timeout)
+        if rc == 124 and err.startswith("timed out"):
+            print("cka-kubeadm: run-on %s %s" % (node, err), file=sys.stderr)
+        return rc
+
+
+def main(argv, stdin=None, **inject):
+    if not argv:
+        print(USAGE, file=sys.stderr)
+        return 2
+    cmd, rest = argv[0], list(argv[1:])
+    timeout = RUN_ON_TIMEOUT
+    if cmd == "run-on" and rest[:1] == ["--timeout"]:
+        try:
+            timeout = int(rest[1])
+            assert timeout > 0
+        except (IndexError, ValueError, AssertionError):
+            print(USAGE, file=sys.stderr)
+            return 2
+        rest = rest[2:]
+    if (cmd in ("ensure-up", "rollback", "generation") and rest or cmd == "run-on" and (len(rest) != 1 or rest[0] not in NODES)
+            or cmd not in ("ensure-up", "rollback", "generation", "run-on")):
+        print(USAGE, file=sys.stderr)
+        return 2
+    try:
+        ca = inject.pop("ca", CA_FILE)
+        if cmd in ("ensure-up", "rollback"):
+            check_ca(ca)                  # before the token is read and before any request
+        token = inject.pop("token", None) or (read_token() if cmd in ("ensure-up", "rollback") else "")
+        k = Kubeadm(token, **inject)
+        if cmd == "ensure-up":
+            k.ensure_up()
+        elif cmd == "rollback":
+            print("GENERATION=%s" % k.rollback(), flush=True)
+        elif cmd == "generation":
+            print(k.generation())
+        else:
+            return k.run_on(rest[0], (stdin or sys.stdin).read(), timeout)
+    except Failure as e:
+        print("cka-kubeadm: %s" % e, file=sys.stderr)
+        return 1
+    except Exception as e:                # never let a library message (which may quote a header) reach the output
+        print("cka-kubeadm: unexpected error: %s" % type(e).__name__, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
