@@ -1,13 +1,15 @@
 "use strict";
 (function () {
   const $ = (id) => document.getElementById(id);
-  const DESKTOP_URL = "http://localhost:6080/vnc.html?autoconnect=1&resize=scale";
+  const DEFAULT_DESKTOP_URL = "http://localhost:6080/vnc.html?autoconnect=1&resize=scale";
   const BEAT_MS = 10000;
   const LABEL = {
     not_opened: "not opened", opened: "opened", flagged: "flagged",
     passed_in_time: "passed in time", passed_over_time: "passed over time", failed: "failed",
   };
 
+  // the server may override the desktop URL (EXAM_DESKTOP_URL) through /api/state
+  const desktopUrl = () => (S && S.desktop_url) || DEFAULT_DESKTOP_URL;
   let S = null;            // last /api/state
   let current = null;      // id of the task shown
   let payload = {};        // task id -> last full task payload (text etc.)
@@ -533,7 +535,7 @@
       b.classList.toggle("active", t === name);
       b.setAttribute("aria-selected", String(t === name));
     }
-    if (name === "desktop" && !desktopLoaded) { $("desktop").src = DESKTOP_URL; desktopLoaded = true; }
+    if (name === "desktop" && !desktopLoaded) { $("desktop").src = desktopUrl(); desktopLoaded = true; }
   }
 
   function setPanelWidth(px) {
@@ -572,8 +574,8 @@
     $("cog-menu").onclick = (e) => {
       const act = e.target.getAttribute("data-act");
       if (act === "reset-width") setPanelWidth(480);
-      if (act === "reload-desktop") { $("desktop").src = DESKTOP_URL; desktopLoaded = true; }
-      if (act === "open-desktop") window.open(DESKTOP_URL, "_blank");
+      if (act === "reload-desktop") { $("desktop").src = desktopUrl(); desktopLoaded = true; }
+      if (act === "open-desktop") window.open(desktopUrl(), "_blank");
       $("cog-menu").hidden = true;
     };
     document.addEventListener("click", () => { hideList(); $("cog-menu").hidden = true; });

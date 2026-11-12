@@ -4,6 +4,7 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
@@ -76,6 +77,28 @@ class HttpCase(unittest.TestCase):
 
     def test_bad_host_header_is_rejected(self):
         self.assertEqual(self.req("GET", "/api/state", headers={"Host": "evil.example"})[0], 403)
+
+    # ---- reverse proxy settings (module-level values, read per request)
+    def test_allowed_extra_host_is_accepted_and_unlisted_still_rejected(self):
+        with mock.patch.object(server, "ALLOWED_HOSTS", {"exam.example.com"}):
+            self.assertEqual(self.req("GET", "/api/state", headers={"Host": "Exam.Example.com"})[0], 200)
+            self.assertEqual(self.req("GET", "/api/state", headers={"Host": "exam.example.com:443"})[0], 200)
+            self.assertEqual(self.req("GET", "/api/state", headers={"Host": "other.example.com"})[0], 403)
+        self.assertEqual(self.req("GET", "/api/state", headers={"Host": "exam.example.com"})[0], 403)
+
+    def test_extra_https_origin_without_port_is_accepted_on_post(self):
+        hdr = {"Host": "exam.example.com"}
+        with mock.patch.object(server, "ALLOWED_HOSTS", {"exam.example.com"}), \
+                mock.patch.object(server, "EXTRA_ORIGINS", {"https://exam.example.com"}):
+            self.assertEqual(self.post("/api/session/end", {}, origin="https://exam.example.com", headers=hdr)[0], 400)
+            self.assertEqual(self.post("/api/session/end", {}, origin="https://evil.example", headers=hdr)[0], 403)
+
+    def test_desktop_url_default_and_override(self):
+        st, body = self.req("GET", "/api/state")
+        self.assertEqual(body["desktop_url"], "http://localhost:6080/vnc.html?autoconnect=1&resize=scale")
+        with mock.patch.object(server, "DESKTOP_URL", "/desktop/vnc.html?path=desktop/websockify&autoconnect=1"):
+            self.assertEqual(self.req("GET", "/api/state")[1]["desktop_url"],
+                             "/desktop/vnc.html?path=desktop/websockify&autoconnect=1")
 
     # ---- Content-Type
     def test_content_type_must_be_json_exactly(self):

@@ -37,7 +37,7 @@ from drill import Conflict, Drill  # noqa: E402
 from session import STATUS_LABELS, Session  # noqa: E402
 from store import DrillFile, Results, SessionFile  # noqa: E402
 
-HOST, PORT = "127.0.0.1", int(os.environ.get("EXAM_PORT", "6081"))
+HOST, PORT = os.environ.get("EXAM_BIND", "127.0.0.1"), int(os.environ.get("EXAM_PORT", "6081"))
 UI_DIR = Path(__file__).resolve().parent / "ui"
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 HOSTS_RESET = ["sudo", "-n", "/usr/local/sbin/cka-hosts-reset"]
@@ -307,6 +307,10 @@ EXAM = None
 MAX_BODY = 64 * 1024
 # a tunnel that maps the server to another local port needs its origin listed here (comma separated)
 EXTRA_ORIGINS = {o.strip() for o in os.environ.get("EXAM_EXTRA_ORIGINS", "").split(",") if o.strip()}
+# Host names accepted besides localhost / 127.0.0.1 (comma separated, case-insensitive, port ignored)
+ALLOWED_HOSTS = {h.strip().lower() for h in os.environ.get("EXAM_ALLOWED_HOSTS", "").split(",") if h.strip()}
+# what the Remote Desktop tab loads; may be relative when a reverse proxy serves the desktop on the same origin
+DESKTOP_URL = os.environ.get("EXAM_DESKTOP_URL", "").strip() or "http://localhost:6080/vnc.html?autoconnect=1&resize=scale"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -320,8 +324,8 @@ class Handler(BaseHTTPRequestHandler):
         return {f"http://localhost:{port}", f"http://127.0.0.1:{port}"} | EXTRA_ORIGINS
 
     def _host_ok(self):
-        host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
-        if host not in ("localhost", "127.0.0.1"):
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].lower()
+        if host not in ("localhost", "127.0.0.1") and host not in ALLOWED_HOSTS:
             return False
         origin = self.headers.get("Origin")
         # a browser sends Origin on every cross-site request; curl and same-origin GETs may omit it
@@ -358,7 +362,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "bad host or origin"})
         path = urlparse(self.path).path
         if path == "/api/state":
-            return self._send(200, EXAM.state())
+            return self._send(200, dict(EXAM.state(), desktop_url=DESKTOP_URL))
         if path == "/api/drill/state":
             return self._send(200, EXAM.drill.state())
         rel = "index.html" if path == "/" else path.lstrip("/")
@@ -418,7 +422,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, EXAM.start(body.get("mode", "weighted")))
             if path == "/api/session/end":
                 EXAM.end()
-                return self._send(200, EXAM.state())
+                return self._send(200, dict(EXAM.state(), desktop_url=DESKTOP_URL))
             if path.startswith("/api/drill/"):
                 return self._send(200, self._drill_post(path, body))
             tid = body.get("id")

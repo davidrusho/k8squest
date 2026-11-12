@@ -19,6 +19,22 @@ Tests: `cd exam && python3 -m unittest discover -s tests -t .`. They make no clu
 
 Tunnel to a different local port: the server accepts an `Origin` only from `http://localhost:<port>` and `http://127.0.0.1:<port>` of the port it is bound to (6081). If you reach it through a tunnel with another local port, start it with `EXAM_EXTRA_ORIGINS=http://localhost:16081` (comma separated list).
 
+### Behind a reverse proxy
+
+All settings are environment variables; the defaults are the local-only behaviour above.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `EXAM_BIND` | `127.0.0.1` | Listen address. |
+| `EXAM_PORT` | `6081` | Listen port. |
+| `EXAM_ALLOWED_HOSTS` | empty | Comma separated `Host` names accepted besides `localhost` and `127.0.0.1` (case-insensitive, port ignored), e.g. `exam.example.com`. |
+| `EXAM_EXTRA_ORIGINS` | empty | Comma separated `Origin` values accepted besides the local ones, e.g. `https://exam.example.com` (no port for the default https port). |
+| `EXAM_DESKTOP_URL` | `http://localhost:6080/vnc.html?autoconnect=1&resize=scale` | URL the Remote Desktop tab loads, delivered to the UI as `desktop_url` in `GET /api/state`. May be relative, e.g. `/desktop/vnc.html?path=desktop/websockify&autoconnect=1&resize=remote`. Keep `autoconnect=1`; `resize=scale` scales the remote screen to the tab, `resize=remote` resizes the remote screen to it; `path` is the websockify path noVNC connects to. |
+
+Example: `EXAM_ALLOWED_HOSTS=exam.example.com EXAM_EXTRA_ORIGINS=https://exam.example.com EXAM_DESKTOP_URL=/desktop/vnc.html?path=desktop/websockify\&autoconnect=1 ./run.sh`
+
+The server has no authentication and its API mutates the cluster, so the proxy must authenticate every request before it reaches the server. The desktop path (`/desktop/` above) must be proxied to websockify (port 6080), with WebSocket upgrade enabled.
+
 Live proof of every pool task: `python3 exam/e2e.py --write-status` (deploys the broken state, validator must fail, applies the level's solution, validator must pass; failing tasks are written to `e2e-status.json` and dropped from the pool).
 
 ## How it works
