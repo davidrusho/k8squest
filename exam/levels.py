@@ -281,11 +281,17 @@ _TOKEN_RE = re.compile(r"PVEAPIToken=\S+")
 # Timeouts, so that this side never gives up before the helper does. The helper waits for its root lock (ensure-up and
 # rollback up to 420 s, run-on up to 60 s) and then runs: rollback or ensure-up up to 420 s, run-on up to its --timeout.
 # rollback / ensure-up: 420 + 420 = 840 s worst case -> 900 s here.
-# setup / solution: 60 + 240 = 300 s -> 330 s here. validate.sh makes one run-on --timeout 150: 60 + 150 = 210 s -> 240 s here.
+# setup / solution: 60 + 240 = 300 s -> 330 s here (more with a `# timeout: N` directive, see below). validate.sh makes
+# run-on calls of at most 150 s each, 60 s lock wait plus its --timeout per call, summed over its calls: 300 s here.
 RUN_ON_SECONDS = 240
 KUBEADM_STEP_TIMEOUT = 900
-KUBEADM_SCRIPT_TIMEOUT = 330
-KUBEADM_VALIDATE_TIMEOUT = 240
+KUBEADM_SCRIPT_MARGIN = 90          # 60 s lock wait + 30 s slack on top of the run-on --timeout a script asks for
+KUBEADM_SCRIPT_TIMEOUT = RUN_ON_SECONDS + KUBEADM_SCRIPT_MARGIN
+KUBEADM_MAX_SCRIPT_SECONDS = 900    # the largest `# timeout: N` a setup.sh / solution.sh may ask for
+# A long setup or solution (apt plus kubeadm upgrade apply) says so in a `# timeout: N` comment on one of its first three
+# lines; the level passes `run-on --timeout N` and waits N + KUBEADM_SCRIPT_MARGIN seconds here.
+_TIMEOUT_DIRECTIVE = re.compile(r"#\s*timeout:\s*(\d+)\s*$")
+KUBEADM_VALIDATE_TIMEOUT = 300      # one validate.sh may make several run-on calls: the sum of (60 + their --timeout) stays below this
 
 
 def _kubeadm_helper(args, timeout, input=None, stdout=False):
@@ -322,21 +328,61 @@ def kubeadm_ensure_up():
     return _kubeadm_helper(["ensure-up"], KUBEADM_STEP_TIMEOUT)
 
 
+def kubeadm_script_seconds(text):
+    """The run-on timeout a kubeadm script asks for with `# timeout: N` on one of its first three lines (default
+    RUN_ON_SECONDS). Raises ValueError for a value outside 1..KUBEADM_MAX_SCRIPT_SECONDS."""
+    for line in text.split("\n", 3)[:3]:
+        m = _TIMEOUT_DIRECTIVE.fullmatch(line.strip())
+        if m:
+            n = int(m.group(1))
+            if not 1 <= n <= KUBEADM_MAX_SCRIPT_SECONDS:
+                raise ValueError("timeout directive %d is outside 1..%d" % (n, KUBEADM_MAX_SCRIPT_SECONDS))
+            return n
+    return RUN_ON_SECONDS
+
+
+_NODE_DIRECTIVE = re.compile(r"#\s*node:\s*(node01|cka1)\s*$")
+CKA1_STEP = ["sudo", "-n", "-H", "-u", "cka1", "env", "-u", "KUBECONFIG", "bash", "-s"]   # a script that runs on k8s-lab as user cka1
+
+
+def _kubeadm_run_file(f, node):
+    """Run one script file as root on `node` (or on the node its `# node: node01` directive names when node is None).
+    The node "cka1" is not a VM: the script runs on k8s-lab as the user cka1, whose kubectl configuration it may change."""
+    text = f.read_text()
+    if not text.strip():
+        return False, "%s is empty" % f.name
+    lines = ([l.strip() for l in text.split("\n", 2)[:2]] + ["", ""])[:2]      # a one-line file has no line 2
+    if node is None:        # the directive is line 1, or line 2 after a shebang
+        d = lines[1] if lines[0].startswith("#!") else lines[0]
+        m = _NODE_DIRECTIVE.fullmatch(d)
+        node = m.group(1) if m else "controlplane"
+    try:
+        secs = kubeadm_script_seconds(text)
+    except ValueError as e:
+        return False, "%s: %s" % (f.name, e)
+    # One brace group: bash -s reads the whole script from stdin before running any of it, so a command that reads stdin
+    # (apt-get, kubectl replace -f -) cannot swallow the rest of the script.
+    body = "{\n" + text.rstrip("\n") + "\n}\n"
+    if node == "cka1":
+        r = run(CKA1_STEP, timeout=secs + 30, cwd="/", input=body, env=dict(os.environ))
+        return r.returncode == 0, (r.stderr or r.stdout).strip()[-400:]
+    return _kubeadm_helper(["run-on", "--timeout", str(secs), node], secs + KUBEADM_SCRIPT_MARGIN, input=body)
+
+
 def _kubeadm_script(rel, name):
-    """Run <name> (setup.sh or solution.sh) of a kubeadm task as root on controlplane, or on node01 when its first
-    line is `# node: node01`. A missing file is fine. Returns (ok, message)."""
+    """Run <name> (setup.sh or solution.sh) of a kubeadm task as root on controlplane, or where its first line's
+    `# node: node01` / `# node: cka1` directive says. A task that must also change another place adds <name minus .sh>-node01.sh
+    (root on node01) and <name minus .sh>-cka1.sh (user cka1 on k8s-lab); they run FIRST, in that order. A missing file is
+    fine. Returns (ok, message)."""
     lvl = materialize(rel, KUBEADM_TASK_NS)
     try:
-        f = lvl / name
-        if not f.is_file():
-            return True, ""
-        text = f.read_text()
-        if not text.strip():
-            return False, "%s is empty" % name
-        head = ([l.strip() for l in text.split("\n", 2)[:2]] + ["", ""])[:2]       # a one-line file has no line 2
-        # the directive is line 1, or line 2 after a shebang
-        node = "node01" if head[0] == "# node: node01" or (head[0].startswith("#!") and head[1] == "# node: node01") else "controlplane"
-        return _kubeadm_helper(["run-on", "--timeout", str(RUN_ON_SECONDS), node], KUBEADM_SCRIPT_TIMEOUT, input=text)
+        res = (True, "")
+        for f, node in ((lvl / (name[:-3] + "-node01.sh"), "node01"), (lvl / (name[:-3] + "-cka1.sh"), "cka1"), (lvl / name, None)):
+            if f.is_file():
+                res = _kubeadm_run_file(f, node)
+                if not res[0]:
+                    return res
+        return res
     finally:
         cleanup(lvl)
 
@@ -372,8 +418,12 @@ def level_texts(rel, namespace, renames=None):
             return rewrite_text((src / name).read_text(), namespace, renames).strip()
         except (OSError, UnicodeDecodeError):
             return None
+    solution = read("solution.sh") if is_question(rel) else read("solution.yaml")
+    if solution and is_question(rel):       # the `# timeout:` / `# node:` directives are for the runner, not for the player
+        lines = solution.split("\n")
+        solution = "\n".join(l for i, l in enumerate(lines) if i >= 3 or not (_TIMEOUT_DIRECTIVE.fullmatch(l.strip()) or _NODE_DIRECTIVE.fullmatch(l.strip())))
     return {"hints": [read(f"hint-{i}.txt") for i in (1, 2, 3)],
-            "solution": read("solution.sh") if is_question(rel) else read("solution.yaml"),
+            "solution": solution,
             "debrief": read("debrief.md")}
 
 

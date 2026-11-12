@@ -1,0 +1,1 @@
+kubelet and kubectl are upgraded with the same `apt-mark unhold`, install, `apt-mark hold` sequence as kubeadm, with the version `1.37.x-*`. The node only reports the new kubelet version after `systemctl daemon-reload` and `systemctl restart kubelet`. Uncordon the node afterwards.

@@ -1,0 +1,1 @@
+`kubeadm upgrade plan` checks that the cluster can be upgraded and prints the versions it can go to, as a component table and the exact `kubeadm upgrade apply v1.37.x` command. It changes nothing. It needs the new `kubeadm` binary: the old one only offers its own minor release.

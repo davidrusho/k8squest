@@ -1,0 +1,1 @@
+With the API down kubectl is useless; go to the node. The static Pod manifests are in `/etc/kubernetes/manifests/` (`ls` it), `crictl ps -a | grep kube-apiserver` shows the container and its exit state and `crictl logs <container-id>` says why it stopped. Here it cannot reach etcd: the `--etcd-servers` port is wrong. Fix the manifest; the kubelet restarts the Pod by itself.

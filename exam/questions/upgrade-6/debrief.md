@@ -1,0 +1,1 @@
+On a worker node `kubeadm upgrade node` fetches the cluster configuration and upgrades the kubelet configuration; it runs ON the worker, kubectl runs from a machine that reaches the API. Order on a worker: drain, upgrade kubeadm, `kubeadm upgrade node`, upgrade kubelet and kubectl, restart the kubelet, `kubectl uncordon`.

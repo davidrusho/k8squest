@@ -337,12 +337,13 @@ class AllQuestionTasks(unittest.TestCase):
             d = levels.level_dir(t["level"])
             texts = {f.name: f.read_text() for f in d.iterdir() if f.is_file()}
             for name, txt in texts.items():
-                if t.get("cluster") == "kubeadm":      # the only sudo allowed is the helper, never a bare one
-                    self.assertEqual(txt.count("sudo"), txt.count("sudo -n /usr/local/sbin/cka-kubeadm "), (t["id"], name))
+                if t.get("cluster") == "kubeadm":      # the only sudo allowed is the helper (or running as cka1), never a bare one
+                    self.assertEqual(txt.count("sudo"), txt.count("sudo -n /usr/local/sbin/cka-kubeadm ") + txt.count("sudo -n -H -u cka1 "),
+                                     (t["id"], name))
                     continue
                 self.assertNotIn("sudo", txt, (t["id"], name))
-            if not any("/opt/course" in x for x in texts.values()):
-                continue
+            if t.get("cluster") == "kubeadm" or not any("/opt/course" in x for x in texts.values()):
+                continue        # kubeadm answer files have their own test (KubeadmQuestionTasks)
             seen += 1
             self.assertIn("setup.sh", texts, t["id"])
             body = [l.strip() for l in texts["setup.sh"].splitlines() if l.strip() and not l.strip().startswith("#")]
@@ -359,6 +360,8 @@ class AllQuestionTasks(unittest.TestCase):
     def test_validators_read_the_answer_without_following_symlinks(self):
         for t in pool.QUESTION_TASKS:
             v = (levels.level_dir(t["level"]) / "validate.sh").read_text()
+            if t.get("cluster") == "kubeadm":
+                continue        # a kubeadm validator tests `[ ! -L file ]` on the node (KubeadmQuestionTasks)
             if "/opt/course" in v:
                 self.assertIn("os.O_NOFOLLOW", v, t["id"])
                 self.assertIn("S_ISREG", v, t["id"])
@@ -388,7 +391,7 @@ class AllQuestionTasks(unittest.TestCase):
     def test_answer_paths_in_task_text_match_the_files(self):
         for t in pool.QUESTION_TASKS:
             d = levels.level_dir(t["level"])
-            if "/opt/course" not in (d / "validate.sh").read_text():
+            if t.get("cluster") == "kubeadm" or "/opt/course" not in (d / "validate.sh").read_text():
                 continue
             for path in re.findall(r"/opt/course/\{ns\}/[\w.-]+", t["text"]):
                 self.assertIn(path.replace("{ns}", "k8squest"), (d / "validate.sh").read_text() + (d / "setup.sh").read_text(), (t["id"], path))
@@ -398,6 +401,145 @@ class AllQuestionTasks(unittest.TestCase):
         for f in levels.WORLDS.rglob("*"):
             if f.is_file() and f.suffix in (".yaml", ".yml", ".sh", ".md", ".txt"):
                 self.assertNotIn("30777", f.read_text(errors="replace"), str(f))
+
+
+class KubeadmQuestionTasks(unittest.TestCase):
+    """Structure of every kubeadm task directory (c100 to c115). Behaviour is proven live by e2e.py, not here."""
+    LOCK_WAIT = 60          # cka-kubeadm run-on waits at most this long for its root lock (hosts/cka-kubeadm RUN_ON_LOCK_WAIT)
+    HELPER_RE = re.compile(r"sudo -n /usr/local/sbin/cka-kubeadm run-on --timeout (\d+) (controlplane|node01)\b")
+
+    def tasks(self):
+        ts = [t for t in pool.QUESTION_TASKS if t.get("cluster") == "kubeadm"]
+        self.assertEqual([t["id"] for t in ts], ["c%d" % i for i in range(100, 116)])
+        return ts
+
+    def test_every_task_has_the_files_a_kubeadm_task_needs(self):
+        for t in self.tasks():
+            d = levels.level_dir(t["level"])
+            self.assertFalse((d / "broken.yaml").exists(), t["id"])
+            for f in ("validate.sh", "solution.sh", "hint-1.txt", "hint-2.txt", "hint-3.txt", "debrief.md"):
+                self.assertTrue((d / f).is_file() and (d / f).read_text().strip(), (t["id"], f))
+            extra = {f.name for f in d.iterdir()} - {"validate.sh", "solution.sh", "setup.sh", "hint-1.txt", "hint-2.txt", "hint-3.txt", "debrief.md",
+                                                     "setup-node01.sh", "setup-cka1.sh", "solution-node01.sh", "solution-cka1.sh"}
+            self.assertEqual(extra, set(), t["id"])
+            self.assertTrue((d / "hint-1.txt").read_text().startswith("Docs: "), t["id"])
+            self.assertTrue((d / "hint-2.txt").read_text().startswith("Search the page for: "), t["id"])
+        # task text: every node or host it sends the candidate to
+        for tid in ("c101", "c102", "c103", "c104", "c105", "c106", "c107", "c108", "c110", "c114"):
+            self.assertIn("ssh controlplane", pool.BY_ID_QUESTION[tid]["text"], tid)
+        for tid in ("c111", "c113"):
+            self.assertIn("ssh node01", pool.BY_ID_QUESTION[tid]["text"], tid)
+        self.assertIn("cka1", pool.BY_ID_QUESTION["c115"]["text"])
+
+    def test_node_and_timeout_directives_parse_and_stay_in_range(self):
+        for t in self.tasks():
+            d = levels.level_dir(t["level"])
+            for f in sorted(d.glob("s*.sh")):
+                text = f.read_text()
+                head = text.split("\n", 3)[:3]
+                if "-node01" in f.name:
+                    self.assertIn("# node: node01", head, f.name)
+                if "-cka1" in f.name:
+                    self.assertIn("# node: cka1", head, f.name)
+                secs = levels.kubeadm_script_seconds(text)          # raises for a value outside 1..900
+                self.assertLessEqual(secs, 900, (t["id"], f.name))
+                # the server side waits longer than the helper can take: lock wait plus the run itself
+                self.assertGreater(secs + levels.KUBEADM_SCRIPT_MARGIN, self.LOCK_WAIT + secs, (t["id"], f.name))
+                if "upgrade apply" in text or "apt-get install" in text:
+                    self.assertGreaterEqual(secs, 300, (t["id"], f.name, "apt and kubeadm need a long timeout"))
+        self.assertEqual(levels.kubeadm_script_seconds("#!/bin/bash\ntrue\n"), levels.RUN_ON_SECONDS)
+        with self.assertRaises(ValueError):
+            levels.kubeadm_script_seconds("# timeout: 0\n")
+        with self.assertRaises(ValueError):
+            levels.kubeadm_script_seconds("# timeout: 901\n")
+
+    def test_validators_go_through_the_helper_and_fit_the_server_timeout(self):
+        for t in self.tasks():
+            v = (levels.level_dir(t["level"]) / "validate.sh").read_text()
+            calls = self.HELPER_RE.findall(v)
+            if t["id"] == "c115":        # reads cka1's own files as cka1 plus one controlplane read
+                self.assertIn("sudo -n -H -u cka1 env -u KUBECONFIG kubectl config current-context", v)
+            self.assertTrue(calls, t["id"])
+            self.assertEqual(len(calls), v.count("cka-kubeadm run-on"), t["id"])      # every call asks for an explicit --timeout
+            # the helper waits up to 60 s for its lock before each call, then runs at most its --timeout
+            self.assertLess(sum(self.LOCK_WAIT + int(n) for n, _ in calls), levels.KUBEADM_VALIDATE_TIMEOUT, t["id"])
+            for n, _ in calls:
+                self.assertLessEqual(int(n), 150, t["id"])
+            # a failed check is exit 1; a check that cannot run says so
+            self.assertIn("could not check", v, t["id"])
+            self.assertEqual(len(re.findall(r"^exit 0$", v, re.M)), 1, t["id"])
+            self.assertEqual(v.count("<<'EOS'"), v.count("run-on"), t["id"])         # the node script is quoted: nothing expands on k8s-lab
+
+    def test_answer_file_tasks_use_one_directory_one_convention(self):
+        seen = 0
+        for t in self.tasks():
+            d = levels.level_dir(t["level"])
+            texts = {f.name: f.read_text() for f in d.iterdir() if f.is_file()}
+            paths = set(re.findall(r"/opt/course/[\w./-]+", t["text"]))
+            if t["id"] == "c115":
+                self.assertEqual(paths, set(), "c115 is the exception: its answer is in cka1's home")
+                self.assertIn("~/cluster1-confirm.txt", t["text"])
+                self.assertIn("$F", texts["validate.sh"])
+                self.assertIn("test -f \"$F\" -a ! -L \"$F\"", texts["validate.sh"])
+                continue
+            for name, txt in texts.items():
+                for path in re.findall(r"/opt/course/[\w./-]+", txt):
+                    self.assertTrue(re.fullmatch(r"/opt/course/kubeadm(/[\w.-]+)?", path), (t["id"], name, path))
+            if not paths:
+                continue
+            seen += 1
+            for path in paths:
+                self.assertRegex(path, r"^/opt/course/kubeadm/[\w.-]+$", t["id"])
+                self.assertIn(path, texts["validate.sh"], (t["id"], path))
+            self.assertIn("[ -f \"$f\" ] && [ ! -L \"$f\" ]", texts["validate.sh"], t["id"])      # a regular file, never a symbolic link
+            self.assertIn("-le ", texts["validate.sh"], t["id"])                                   # and a size limit
+            body = [l.strip() for l in texts["setup.sh"].splitlines() if l.strip() and not l.strip().startswith("#")]
+            body = [l for l in body if l != "set -e" and l != "set -eu"]
+            self.assertEqual(texts["setup.sh"].count("rm -rf /opt/course/kubeadm\n"), 1, t["id"])
+            i = body.index("rm -rf /opt/course/kubeadm")
+            self.assertEqual(body[i + 1:i + 3], ["mkdir -p /opt/course", "mkdir -m 1777 /opt/course/kubeadm"], t["id"])    # the candidate is not root
+        self.assertEqual(seen, 4)           # c101, c102, c103 and c107 are the answer-file tasks
+
+    def test_scripts_parse_and_every_setup_is_stand_alone(self):
+        import tests._path as guard
+        for t in self.tasks():
+            d = levels.level_dir(t["level"])
+            for f in sorted(d.glob("*.sh")):
+                with mock.patch.object(subprocess, "Popen", guard.REAL_POPEN):
+                    r = guard.REAL_RUN(["bash", "-n", str(f)], capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, "%s: %s" % (f, r.stderr))
+                txt = f.read_text()
+                self.assertTrue(txt.startswith("#!/bin/bash\n"), f)
+                if f.name != "validate.sh":      # run-on feeds one file: no sourcing, no copies of other files
+                    self.assertNotIn("source ", txt, f)
+                    self.assertNotRegex(txt, r"(^|\s)\. /", f)
+                self.assertNotRegex(txt, r"1\.37\.\d", (f, "a patch release is read from the repository, never written down"))
+        # a task that depends on an earlier step starts the cluster at that step by itself
+        for tid in ("c108", "c109", "c110", "c111"):
+            txt = (levels.level_dir(pool.BY_ID_QUESTION[tid]["level"]) / "setup.sh").read_text()
+            self.assertIn("apt-get install", txt, tid)
+        for tid, needs in (("c109", ["upgrade apply"]), ("c110", ["upgrade apply", "drain controlplane"]),
+                           ("c111", ["upgrade apply", "drain controlplane", "kubelet=", "uncordon controlplane", "cordon node01"])):
+            txt = (levels.level_dir(pool.BY_ID_QUESTION[tid]["level"]) / "setup.sh").read_text()
+            for n in needs:
+                self.assertIn(n, txt, (tid, n))
+        self.assertIn("kubeadm=", (levels.level_dir("questions/upgrade-6") / "setup-node01.sh").read_text())
+
+    def test_the_shown_solution_has_no_runner_directives(self):
+        for t in self.tasks():
+            raw = (levels.level_dir(t["level"]) / "solution.sh").read_text()
+            shown = levels.level_texts(t["level"], "kubeadm")["solution"]
+            self.assertNotRegex(shown, r"(?m)^#\s*(timeout|node):", t["id"])
+            self.assertEqual(len(shown.splitlines()), len([l for l in raw.splitlines() if not re.fullmatch(r"#\s*(timeout|node):.*", l.strip())]), t["id"])
+        self.assertIn("# timeout: 900", (levels.level_dir("questions/upgrade-3") / "solution.sh").read_text())      # the file keeps it
+        self.assertNotIn("timeout", levels.level_texts("questions/upgrade-3", "kubeadm")["solution"].split("\n")[1])
+
+    def test_the_text_never_hardcodes_a_patch_release(self):
+        for t in self.tasks():
+            self.assertNotRegex(pool.render_text(t, "h", "drill")["body"], r"1\.37\.\d", t["id"])
+            texts = levels.level_texts(t["level"], "kubeadm")
+            for raw in texts["hints"] + [texts["solution"], texts["debrief"]]:
+                self.assertNotRegex(raw or "", r"1\.37\.\d", t["id"])
 
 
 if __name__ == "__main__":

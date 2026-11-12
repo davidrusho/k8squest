@@ -626,6 +626,53 @@ Write the documented fields of a Pod's `tolerations` (the output of kubectl's bu
     Q("c100", "etcd-3", CA, "lookup", """
 On the kubeadm cluster, take an etcd snapshot to `/opt/backup.db` on the control plane node. Connect with `ssh controlplane` (user candidate, sudo is allowed). Use the control plane certificates: CA `/etc/kubernetes/pki/etcd/ca.crt`, certificate `server.crt` and key `server.key` in the same folder. etcd listens on `https://127.0.0.1:2379`.
 """, cluster="kubeadm"),
+    # c101 to c115 (T-615.25): the rest of the kubeadm drill questions. Nothing is left out. Answer files live on the node the
+    # text names, under /opt/course/kubeadm/ (created by setup.sh, mode 1777); c115 is the one exception (see its text).
+    Q("c101", "etcd-1", CA, "describe-grep", """
+On the kubeadm cluster, the etcd Pod runs on node `controlplane` (connect with `ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`). Find the server certificate file, the key file, the trusted CA file and the data directory etcd is configured with. Write these four settings, one per line as `--name=value` (`--cert-file`, `--key-file`, `--trusted-ca-file`, `--data-dir`), to `/opt/course/kubeadm/etcd-flags.txt` on controlplane. Other lines in the file do no harm.
+""", cluster="kubeadm"),
+    Q("c102", "etcd-2", CA, "describe-grep", """
+On the kubeadm cluster, find where the etcd data directory is configured on the control plane node (connect with `ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`). Write the line that sets it to `/opt/course/kubeadm/etcd-datadir.txt` on controlplane. The file must hold that line only.
+""", cluster="kubeadm"),
+    Q("c103", "etcd-4", CA, "lookup", """
+On node `controlplane` of the kubeadm cluster (connect with `ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`), an etcd snapshot exists at `/opt/backup.db`. Check it and write its details, printed as a table, to `/opt/course/kubeadm/snapshot-status.txt` on controlplane.
+""", cluster="kubeadm"),
+    Q("c104", "etcd-5", CA, "lookup", """
+On node `controlplane` of the kubeadm cluster (connect with `ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`), restore the etcd snapshot `/opt/backup.db` into the new data directory `/var/lib/etcd-restore`. Do not change the running etcd or its manifest.
+""", cluster="kubeadm"),
+    Q("c105", "etcd-6", CA, "patch-edit", """
+On node `controlplane` of the kubeadm cluster (connect with `ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`), the etcd snapshot `/opt/backup.db` is already restored into `/var/lib/etcd-restore`. Make the etcd static Pod use that directory, so that the cluster serves the restored data. Then make the kubeadm cluster configuration agree, so that a later kubeadm upgrade keeps the new directory. Wait until the API server answers again.
+""", cluster="kubeadm"),
+    Q("c106", "upgrade-1", CA, "lookup", """
+The kubeadm cluster runs Kubernetes v1.36 and the package repository on its nodes already points at v1.37. On node `controlplane` (connect with `ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`), upgrade only the `kubeadm` package to the latest 1.37 patch release: unhold it, update the package index, install it and hold it again. Do not upgrade the cluster itself.
+""", cluster="kubeadm"),
+    Q("c107", "upgrade-2", CA, "lookup", """
+On node `controlplane` of the kubeadm cluster (connect with `ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`), the `kubeadm` package is already the latest 1.37 patch release and the cluster runs v1.36. Check which versions the cluster can be upgraded to and write the full output of that check (standard output and standard error) to `/opt/course/kubeadm/upgrade-plan.txt` on controlplane. Do not upgrade anything.
+""", cluster="kubeadm"),
+    Q("c108", "upgrade-3", CA, "lookup", """
+On node `controlplane` of the kubeadm cluster (connect with `ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`), the `kubeadm` package is already the latest 1.37 patch release. Upgrade the first control plane node to that same version. Leave the kubelet and kubectl packages and the worker node alone.
+""", cluster="kubeadm"),
+    Q("c109", "upgrade-4", CA, "node-maint", """
+The control plane of the kubeadm cluster is already upgraded to the latest 1.37 patch release. Before the kubelet on node `controlplane` is upgraded, drain that node: mark it unschedulable and evict its Pods, except the DaemonSet Pods. Use kubectl with context `cluster1` from cka1, or on node `controlplane` (`ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`). Do not upgrade the kubelet.
+""", cluster="kubeadm"),
+    Q("c110", "upgrade-5", CA, "lookup", """
+The control plane of the kubeadm cluster is upgraded to the latest 1.37 patch release and node `controlplane` is drained. On node `controlplane` (connect with `ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`), upgrade the `kubelet` and `kubectl` packages to the same 1.37 patch release as `kubeadm` (unhold, update, install, hold), then reload systemd and restart the kubelet. The node `controlplane` must report the new kubelet version. Leave the node cordoned.
+""", cluster="kubeadm"),
+    Q("c111", "upgrade-6", CA, "lookup", """
+The control plane of the kubeadm cluster is fully upgraded to the latest 1.37 patch release. Worker node `node01` is cordoned and its `kubeadm` package is already upgraded to the same version. On `node01` (connect with `ssh node01`, user candidate, sudo is allowed; work as root with `sudo -i`), upgrade the kubeadm-managed node configuration, then make `node01` schedulable again. Do not upgrade the kubelet or kubectl packages.
+""", cluster="kubeadm"),
+    Q("c112", "nodes-8", CA, "node-maint", """
+On the kubeadm cluster, drain worker node `node01`: ignore the DaemonSet Pods and delete the data of emptyDir volumes. Then bring the node back so that it is schedulable again. `node01` is the only worker node, so the evicted Pods have nowhere to go and stay Pending until you bring it back. Use kubectl with context `cluster1` from cka1, or on node `controlplane` (`ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`). The Pods of Deployment `drain-web` in namespace `default` must end up Running on `node01`.
+""", cluster="kubeadm"),
+    Q("c113", "debugging-7", TS, "logs-exec", """
+On the kubeadm cluster, worker node `node01` is NotReady. Find out why from the kubelet log on the node (connect with `ssh node01`, user candidate, sudo is allowed; work as root with `sudo -i`) and fix the cause, so that `node01` becomes Ready again and the kubelet is enabled and running. Fix the setting that is wrong; do not work around it.
+""", cluster="kubeadm"),
+    Q("c114", "debugging-8", TS, "logs-exec", """
+On the kubeadm cluster, the API server is down: kubectl against context `cluster1` cannot connect. Connect to node `controlplane` (`ssh controlplane`, user candidate, sudo is allowed; work as root with `sudo -i`) and find the cause with the static Pod manifests and the container runtime tools (`crictl`). Restore the API server so that it answers and its Pod is Running. Change only what is broken.
+""", cluster="kubeadm"),
+    Q("c115", "context-namespace-3", CA, "config", """
+This task is done on cka1 only. The task says to work in context `cluster1`: switch kubectl on cka1 to it and keep it as the current context. To confirm, write two lines to `~/cluster1-confirm.txt` on cka1: first the name of the current context, then the value of key `token` of ConfigMap `ctx-marker` in namespace `default` of that cluster, read with kubectl.
+""", cluster="kubeadm"),
 ]
 BY_ID_QUESTION = {t["id"]: t for t in QUESTION_TASKS}
 assert len(BY_ID_QUESTION) == len(QUESTION_TASKS) and not set(BY_ID_QUESTION) & set(BY_ID_ALL), "duplicate task id"

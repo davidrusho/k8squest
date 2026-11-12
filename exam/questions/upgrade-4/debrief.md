@@ -1,0 +1,1 @@
+`kubectl drain controlplane --ignore-daemonsets` cordons the node first, then evicts the Pods; DaemonSet Pods cannot be evicted, hence the flag. Drain before upgrading the kubelet and kubectl on that node. The drained node stays cordoned until `kubectl uncordon`.

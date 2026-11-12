@@ -1,0 +1,1 @@
+kubeadm runs etcd as a static Pod, so its `--data-dir` flag is in `/etc/kubernetes/manifests/etcd.yaml` on the control plane node. `kubectl -n kube-system describe pod -l component=etcd | grep data-dir` shows the same flag from the API without logging in to the node.

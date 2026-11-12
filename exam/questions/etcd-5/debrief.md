@@ -1,0 +1,1 @@
+`etcdutl --data-dir /var/lib/etcd-restore snapshot restore /opt/backup.db` creates the new data directory. In etcd 3.6 the restore exists only in `etcdutl`. Copying the live data directory is not a restore: the snapshot is a consistent point in time, the live directory is a moving target. The running etcd is not touched until its manifest points at the new directory.

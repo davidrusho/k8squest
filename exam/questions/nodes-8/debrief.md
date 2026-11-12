@@ -1,0 +1,1 @@
+`kubectl drain node01 --ignore-daemonsets --delete-emptydir-data` cordons the node and then evicts its Pods; DaemonSet Pods are skipped with the first flag, Pods with an emptyDir volume need the second. With one worker the evicted Pods stay Pending until `kubectl uncordon node01` makes the node schedulable again.

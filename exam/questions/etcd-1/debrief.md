@@ -1,0 +1,1 @@
+The etcd settings are in the Pod's command line: `kubectl -n kube-system describe pod etcd-controlplane | grep -E "cert-file|key-file|trusted-ca|data-dir"` or the same words in `/etc/kubernetes/manifests/etcd.yaml` on the node. Use the server certificate and key and `--trusted-ca-file` for a backup; `--peer-*` files are for etcd members talking to each other.

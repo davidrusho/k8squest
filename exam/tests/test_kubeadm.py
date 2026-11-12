@@ -333,7 +333,7 @@ class KubeadmDrill(unittest.TestCase):
         self.cluster = KubeadmCluster(self.clock)
         self.exam = make(self.tmp.name, self.cluster, self.clock)
         self.drill = self.exam.drill
-        other = dict(pool.BY_ID_QUESTION["c100"], id="c101")
+        other = dict(pool.BY_ID_QUESTION["c100"], id="c999")
         dp = [pool.BY_ID_QUESTION["c100"], other, pool.BY_ID["t03"]]
         for m in (mock.patch.object(pool, "DRILL_POOL", dp), mock.patch.object(pool, "DRILL_BY_ID", {t["id"]: t for t in dp})):
             m.start()
@@ -350,7 +350,7 @@ class KubeadmDrill(unittest.TestCase):
         self.assertEqual((t["cluster"], t["qid"], t["source"], t["node_dependent"]), ("kubeadm", "etcd-3", "question", False))
         self.assertNotIn("c100", {x["id"] for x in pool.ALL_TASKS})
         self.assertIn("ssh controlplane", t["text"])
-        self.assertEqual([x["id"] for x in pool.QUESTION_TASKS if x.get("cluster") == "kubeadm"], ["c100"])
+        self.assertEqual([x["id"] for x in pool.QUESTION_TASKS if x.get("cluster") == "kubeadm"], ["c%d" % i for i in range(100, 116)])
         self.assertTrue(all(x.get("cluster") is None for x in pool.ALL_TASKS))
 
     def test_open_rolls_back_then_sets_up_once_and_becomes_the_owner(self):
@@ -381,9 +381,9 @@ class KubeadmDrill(unittest.TestCase):
 
     def test_opening_another_kubeadm_task_rolls_back_again_and_the_first_becomes_stale(self):
         self.drill.open("c100")
-        self.drill.open("c101")
+        self.drill.open("c999")
         self.assertEqual(self.cluster.klog.count("rollback"), 2)
-        self.assertEqual(self.owner(), ("c101", 2))
+        self.assertEqual(self.owner(), ("c999", 2))
         self.cluster.klog.clear()
         with self.assertRaises(Conflict) as cm:
             self.drill.check("c100")
@@ -414,12 +414,12 @@ class KubeadmDrill(unittest.TestCase):
 
     def test_showing_the_solution_marks_the_cluster_dirty_only_for_the_owner(self):
         self.drill.open("c100")
-        self.drill.open("c101")
+        self.drill.open("c999")
         for i in (1, 2, 3, 4):
             self.drill.hint("c100", i)                             # c100 is not the owner
-        self.assertEqual(self.owner(), ("c101", 2))
+        self.assertEqual(self.owner(), ("c999", 2))
         for i in (1, 2, 3, 4):
-            p = self.drill.hint("c101", i)
+            p = self.drill.hint("c999", i)
         self.assertEqual(self.owner(), ("?", 2))
         self.assertIn("rolled back before the next kubeadm task", p["notice"])
         self.assertIn("etcdctl", p["solution"])
@@ -639,8 +639,52 @@ class LevelsKubeadm(unittest.TestCase):
                 self.assertEqual(levels.kubeadm_solution("questions/a")[0], True)
                 self.assertEqual(levels.kubeadm_setup("questions/c"), (True, ""))       # no setup.sh: nothing to run
             self.assertEqual([c["args"][-4:] for c in calls], [["run-on", "--timeout", "240", n] for n in ("controlplane", "node01", "controlplane")])
-            self.assertEqual(calls[0]["input"], "#!/bin/bash\nrm -f /opt/x\n")
-            self.assertEqual(calls[2]["input"], "echo sol\n")
+            self.assertEqual(calls[0]["input"], "{\n#!/bin/bash\nrm -f /opt/x\n}\n")     # one brace group, see _kubeadm_run_file
+            self.assertEqual(calls[2]["input"], "{\necho sol\n}\n")
+
+    def test_timeout_directive_sets_run_on_and_the_server_side_timeout(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(levels, "QUESTIONS", Path(tmp)):
+            self.question_dir(tmp, "a", {"setup.sh": "#!/bin/bash\n# timeout: 800\napt-get update\n", "solution.sh": "# timeout: 500\ntrue\n"})
+            self.question_dir(tmp, "b", {"setup.sh": "#!/bin/bash\n# node: node01\n# timeout: 700\ntrue\n"})
+            self.question_dir(tmp, "c", {"setup.sh": "#!/bin/bash\ntrue\n# timeout: 800\ntrue\n"})   # the directive may sit on line 3
+            self.question_dir(tmp, "d", {"setup.sh": "#!/bin/bash\n# timeout: 901\ntrue\n"})
+            self.question_dir(tmp, "e", {"setup.sh": "#!/bin/bash\ntrue\ntrue\n# timeout: 800\n"})   # line 4: ignored
+            calls, fake = self.run_fake([])
+            with mock.patch.object(levels, "run", fake):
+                self.assertTrue(levels.kubeadm_setup("questions/a")[0])
+                self.assertTrue(levels.kubeadm_solution("questions/a")[0])
+                self.assertTrue(levels.kubeadm_setup("questions/b")[0])
+                self.assertTrue(levels.kubeadm_setup("questions/c")[0])
+                ok, msg = levels.kubeadm_setup("questions/d")
+                self.assertFalse(ok)
+                self.assertIn("outside 1..900", msg)
+                self.assertTrue(levels.kubeadm_setup("questions/e")[0])
+            self.assertEqual([(c["args"][-3], c["args"][-2], c["timeout"]) for c in calls],
+                             [("--timeout", "800", 890), ("--timeout", "500", 590), ("--timeout", "700", 790), ("--timeout", "800", 890), ("--timeout", "240", 330)])
+            self.assertEqual([c["args"][-1] for c in calls], ["controlplane", "controlplane", "node01", "controlplane", "controlplane"])
+        for secs in (1, 240, 900):
+            self.assertGreater(secs + levels.KUBEADM_SCRIPT_MARGIN, ck.RUN_ON_LOCK_WAIT + secs)      # the helper waits its lock, then runs
+
+    def test_node01_and_cka1_pieces_run_first_and_cka1_runs_on_k8s_lab_as_cka1(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(levels, "QUESTIONS", Path(tmp)):
+            self.question_dir(tmp, "a", {"setup.sh": "main\n", "setup-node01.sh": "# node: node01\nn1\n", "setup-cka1.sh": "# node: cka1\nc1\n",
+                                         "solution.sh": "# node: cka1\nsolo\n"})
+            calls, fake = self.run_fake([])
+            with mock.patch.object(levels, "run", fake):
+                self.assertEqual(levels.kubeadm_setup("questions/a")[0], True)
+                self.assertEqual(levels.kubeadm_solution("questions/a")[0], True)
+            self.assertEqual([c["input"].split("\n")[-3] for c in calls], ["n1", "c1", "main", "solo"])
+            self.assertEqual(calls[0]["args"][-1], "node01")
+            self.assertEqual(calls[1]["args"], levels.CKA1_STEP)
+            self.assertEqual(calls[1]["cwd"], "/")
+            self.assertEqual(calls[3]["args"], levels.CKA1_STEP)        # the directive in solution.sh itself
+            self.assertEqual(calls[2]["args"][-1], "controlplane")
+            self.assertGreater(calls[1]["timeout"], levels.RUN_ON_SECONDS)
+            # a failing piece stops the sequence
+            calls, fake = self.run_fake([1])
+            with mock.patch.object(levels, "run", fake):
+                self.assertFalse(levels.kubeadm_setup("questions/a")[0])
+            self.assertEqual(len(calls), 1)
 
     def test_validate_runs_bash_in_the_materialized_dir_without_the_kind_pin(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(levels, "QUESTIONS", Path(tmp)):

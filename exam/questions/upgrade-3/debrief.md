@@ -1,0 +1,1 @@
+`kubeadm upgrade apply v1.37.x` is for the first control plane node only (other control plane nodes use `kubeadm upgrade node`). It upgrades the control plane static Pods, CoreDNS and kube-proxy, but not the kubelet: that comes next, after draining the node.

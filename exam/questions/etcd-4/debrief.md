@@ -1,0 +1,1 @@
+In etcd 3.6 the snapshot tools that work on files are in `etcdutl`: `etcdutl --write-out=table snapshot status /opt/backup.db`. `etcdctl` talks to a running etcd over the network and no longer has `snapshot status`.

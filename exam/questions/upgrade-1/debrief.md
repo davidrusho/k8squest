@@ -1,0 +1,1 @@
+Upgrade the packages in the order of the docs: `kubeadm` first, held again right away so that a routine `apt upgrade` cannot move it. The version is `1.37.x-*` with x the latest patch (`apt-cache madison kubeadm` lists them). Installing the package does not upgrade the cluster; that is `kubeadm upgrade apply`.
